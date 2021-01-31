@@ -24,15 +24,19 @@ public class PdfService {
     @Value("${pdfapi.output_folder}")
     private String OUTPUT_FOLDER;
 
-    public void merge(MultipartFile file1, MultipartFile file2) throws IOException {
+    public void merge(MultipartFile... file) throws Exception {
 
-        PdfDocument pdfDocument = new PdfDocument(new PdfReader(new ByteArrayInputStream(file1.getBytes())), new PdfWriter(OUTPUT_FOLDER + "merged_" + timestamp() + ".pdf"));
-        PdfDocument pdfDocument2 = new PdfDocument(new PdfReader(new ByteArrayInputStream(file2.getBytes())));
+        if (file.length < 2) { throw new Exception("MERGE_NEEDS_AT_LEAST_TWO_DOCUMENTS"); }
 
+        PdfDocument pdfDocument = new PdfDocument(new PdfReader(new ByteArrayInputStream(file[0].getBytes())), new PdfWriter(OUTPUT_FOLDER + "merged_" + timestamp() + ".pdf"));
         PdfMerger merger = new PdfMerger(pdfDocument);
-        merger.merge(pdfDocument2, 1, pdfDocument2.getNumberOfPages());
 
-        pdfDocument2.close();
+        for (int i = 1; i < file.length; i++) {
+            PdfDocument pdfDocument2 = new PdfDocument(new PdfReader(new ByteArrayInputStream(file[i].getBytes())));
+            merger.merge(pdfDocument2, 1, pdfDocument2.getNumberOfPages());
+            pdfDocument2.close();
+        }
+
         pdfDocument.close();
 
     }
@@ -55,6 +59,41 @@ public class PdfService {
         };
 
         pdfSplitter.splitByPageCount(maxPageCount, (pdfDoc, pageRange) -> pdfDoc.close());
+        pdfDocument.close();
+
+    }
+
+    public void extract(MultipartFile file, Integer startPage, Integer endPage) throws IOException {
+
+        PdfDocument pdfDocument = new PdfDocument(new PdfReader(new ByteArrayInputStream(file.getBytes())));
+
+        PdfSplitter pdfSplitter = new PdfSplitter(pdfDocument) {
+            @Override
+            protected PdfWriter getNextPdfWriter(PageRange documentPageRange) {
+                try {
+                    return new PdfWriter(OUTPUT_FOLDER + "extractPages_" + timestamp() + ".pdf");
+                } catch (final FileNotFoundException ignored) {
+                    throw new RuntimeException();
+                }
+            }
+        };
+
+        PdfDocument newPdfDocument = pdfSplitter.extractPageRange(new PageRange().addPageSequence(startPage, endPage));
+
+        newPdfDocument.close();
+        pdfDocument.close();
+
+    }
+
+    public void remove(MultipartFile file, Integer... page) throws IOException {
+
+        PdfDocument pdfDocument = new PdfDocument(new PdfReader(new ByteArrayInputStream(file.getBytes())), new PdfWriter(OUTPUT_FOLDER + "removePages_" + timestamp() + ".pdf"));
+
+        int removeCount = 0;
+        for (Integer pageNumber : page) {
+            pdfDocument.removePage(pageNumber - removeCount++);
+        }
+
         pdfDocument.close();
 
     }

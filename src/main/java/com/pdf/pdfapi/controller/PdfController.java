@@ -20,9 +20,9 @@ public class PdfController {
     }
 
     @PostMapping("/merge")
-    public void merge(@RequestParam MultipartFile file1, @RequestParam MultipartFile file2) throws IOException {
+    public void merge(@RequestParam MultipartFile... file) throws Exception {
 
-        pdfService.merge(file1, file2);
+        pdfService.merge(file);
 
     }
 
@@ -30,6 +30,20 @@ public class PdfController {
     public void split(@RequestParam MultipartFile file, @RequestParam Integer maxPageCount) throws IOException {
 
         pdfService.split(file, maxPageCount);
+
+    }
+
+    @PostMapping("/extract")
+    public void extract(@RequestParam MultipartFile file, @RequestParam Integer startPage, @RequestParam Integer endPage) throws IOException {
+
+        pdfService.extract(file, startPage, endPage);
+
+    }
+
+    @PostMapping("/remove")
+    public void remove(@RequestParam MultipartFile file, @RequestParam Integer... page) throws IOException {
+
+        pdfService.remove(file, page);
 
     }
 
