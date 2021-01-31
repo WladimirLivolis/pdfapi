@@ -98,24 +98,28 @@ public class PdfService {
 
     }
 
-    public void convertImageToPDF(MultipartFile file) throws IOException {
+    public void convertImageToPDF(MultipartFile... file) throws IOException {
 
-        PdfDocument pdfDocument = new PdfDocument(new PdfWriter(OUTPUT_FOLDER + "ImageToPdf_" + timestamp() + ".pdf"));
-        Document document = new Document(pdfDocument);
+        for (MultipartFile currentFile : file) {
 
-        ImageData imageData = ImageDataFactory.create(file.getBytes());
-        Image image = new Image(imageData);
-        image.setWidth(pdfDocument.getDefaultPageSize().getWidth() - 50);
-        image.setAutoScaleHeight(true);
+            PdfDocument pdfDocument = new PdfDocument(new PdfWriter(OUTPUT_FOLDER + "ImageToPdf_" + timestamp() + ".pdf"));
+            Document document = new Document(pdfDocument);
 
-        document.add(image);
-        pdfDocument.close();
+            ImageData imageData = ImageDataFactory.create(currentFile.getBytes());
+            Image image = new Image(imageData);
+            image.setWidth(pdfDocument.getDefaultPageSize().getWidth() - 50);
+            image.setAutoScaleHeight(true);
+
+            document.add(image);
+            pdfDocument.close();
+
+        }
 
     }
 
     private String timestamp() {
         LocalDateTime time = LocalDateTime.now();
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
         return time.format(formatter);
     }
 

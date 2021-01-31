@@ -48,7 +48,7 @@ public class PdfController {
     }
 
     @PostMapping("/convertImageToPDF")
-    public void convertImageToPDF(@RequestParam MultipartFile file) throws IOException {
+    public void convertImageToPDF(@RequestParam MultipartFile... file) throws IOException {
 
         pdfService.convertImageToPDF(file);
 

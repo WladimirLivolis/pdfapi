@@ -7,7 +7,7 @@ The following operations are currently supported:
   - Split a PDF
   - Extract pages from a PDF
   - Remove pages form a PDF  
-  - Convert an image file to PDF
+  - Convert multiple image files to PDFs
 
 ## Merge
 
@@ -62,6 +62,6 @@ POST /pdfapi/convertImageToPDF
  
 **Form-data Params**: ```file```.
  
-It converts ```file``` into a PDF.
+It converts each image file tagged with ```file``` into a PDF.
  
    [itext]: <http://itextpdf.com/en>
