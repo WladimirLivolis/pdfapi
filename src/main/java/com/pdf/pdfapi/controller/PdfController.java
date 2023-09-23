@@ -7,8 +7,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.IOException;
-
 @RestController
 @RequestMapping("/pdfapi")
 public class PdfController {
@@ -20,35 +18,35 @@ public class PdfController {
     }
 
     @PostMapping("/merge")
-    public void merge(@RequestParam MultipartFile... file) throws Exception {
+    public void merge(@RequestParam MultipartFile... file) {
 
         pdfService.merge(file);
 
     }
 
     @PostMapping("/split")
-    public void split(@RequestParam MultipartFile file, @RequestParam Integer maxPageCount) throws IOException {
+    public void split(@RequestParam MultipartFile file, @RequestParam Integer maxPageCount) {
 
         pdfService.split(file, maxPageCount);
 
     }
 
     @PostMapping("/extract")
-    public void extract(@RequestParam MultipartFile file, @RequestParam Integer startPage, @RequestParam Integer endPage) throws IOException {
+    public void extract(@RequestParam MultipartFile file, @RequestParam Integer startPage, @RequestParam Integer endPage) {
 
         pdfService.extract(file, startPage, endPage);
 
     }
 
     @PostMapping("/remove")
-    public void remove(@RequestParam MultipartFile file, @RequestParam Integer... page) throws IOException {
+    public void remove(@RequestParam MultipartFile file, @RequestParam Integer... page) {
 
         pdfService.remove(file, page);
 
     }
 
     @PostMapping("/convertImageToPDF")
-    public void convertImageToPDF(@RequestParam MultipartFile... file) throws IOException {
+    public void convertImageToPDF(@RequestParam MultipartFile... file) {
 
         pdfService.convertImageToPDF(file);
 

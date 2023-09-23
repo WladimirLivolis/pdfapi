@@ -4,10 +4,10 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-public class PdfapiApplication {
+public class PdfApiApplication {
 
     public static void main(String[] args) {
-        SpringApplication.run(PdfapiApplication.class, args);
+        SpringApplication.run(PdfApiApplication.class, args);
     }
 
 }
