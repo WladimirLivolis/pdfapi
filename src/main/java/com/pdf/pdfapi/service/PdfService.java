@@ -10,9 +10,10 @@ import com.itextpdf.kernel.utils.PdfMerger;
 import com.itextpdf.kernel.utils.PdfSplitter;
 import com.itextpdf.layout.Document;
 import com.itextpdf.layout.element.Image;
+import com.pdf.pdfapi.config.PdfConfig;
 import com.pdf.pdfapi.exception.PdfErrorException;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -21,11 +22,11 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 @Service
+@RequiredArgsConstructor
 @Log4j2
 public class PdfService {
 
-    @Value("${pdfapi.output_folder}")
-    private String outputFolder;
+    private final PdfConfig pdfConfig;
 
     public void merge(MultipartFile... file) {
 
@@ -39,7 +40,7 @@ public class PdfService {
 
             PdfDocument pdfDocument = new PdfDocument(
                     new PdfReader(new ByteArrayInputStream(file[0].getBytes())),
-                    new PdfWriter(outputFolder + "merged_" + timestamp() + ".pdf")
+                    new PdfWriter(String.format("%smerged_%s.pdf", pdfConfig.getOutputFolder(), timestamp()))
             );
             PdfMerger merger = new PdfMerger(pdfDocument);
 
@@ -62,14 +63,14 @@ public class PdfService {
         try {
 
             PdfDocument pdfDocument = new PdfDocument(new PdfReader(new ByteArrayInputStream(file.getBytes())));
-            String fileName = "splitDocument_" + timestamp() + "_";
+            String fileName = String.format("splitDocument_%s_", timestamp());
             PdfSplitter pdfSplitter = new PdfSplitter(pdfDocument) {
                 int partNumber = 1;
 
                 @Override
                 protected PdfWriter getNextPdfWriter(PageRange documentPageRange) {
                     try {
-                        return new PdfWriter(outputFolder + fileName + partNumber++ + ".pdf");
+                        return new PdfWriter(String.format("%s%s%d.pdf",pdfConfig.getOutputFolder(), fileName, partNumber++));
                     } catch (final FileNotFoundException ex) {
                         throw new PdfErrorException(ex.getMessage());
                     }
@@ -95,7 +96,7 @@ public class PdfService {
                 @Override
                 protected PdfWriter getNextPdfWriter(PageRange documentPageRange) {
                     try {
-                        return new PdfWriter(outputFolder + "extractPages_" + timestamp() + ".pdf");
+                        return new PdfWriter(String.format("%sextractedPages_%s.pdf", pdfConfig.getOutputFolder(), timestamp()));
                     } catch (final FileNotFoundException ex) {
                         throw new PdfErrorException(ex.getMessage());
                     }
@@ -119,7 +120,7 @@ public class PdfService {
 
             PdfDocument pdfDocument = new PdfDocument(
                     new PdfReader(new ByteArrayInputStream(file.getBytes())),
-                    new PdfWriter(outputFolder + "removePages_" + timestamp() + ".pdf")
+                    new PdfWriter(String.format("%sremovedPages_%s.pdf", pdfConfig.getOutputFolder(), timestamp()))
             );
 
             int removeCount = 0;
@@ -141,7 +142,7 @@ public class PdfService {
 
             for (MultipartFile currentFile : file) {
 
-                PdfDocument pdfDocument = new PdfDocument(new PdfWriter(outputFolder + "ImageToPdf_" + timestamp() + ".pdf"));
+                PdfDocument pdfDocument = new PdfDocument(new PdfWriter(String.format("%sImageToPdf_%s.pdf",pdfConfig.getOutputFolder(), timestamp())));
                 Document document = new Document(pdfDocument);
 
                 ImageData imageData = ImageDataFactory.create(currentFile.getBytes());

@@ -1,6 +1,7 @@
 package com.pdf.pdfapi.controller;
 
 import com.pdf.pdfapi.service.PdfService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -9,13 +10,10 @@ import org.springframework.web.multipart.MultipartFile;
 
 @RestController
 @RequestMapping("/pdfapi")
+@RequiredArgsConstructor
 public class PdfController {
 
     private final PdfService pdfService;
-
-    public PdfController(PdfService pdfService) {
-        this.pdfService = pdfService;
-    }
 
     @PostMapping("/merge")
     public void merge(@RequestParam MultipartFile... file) {
