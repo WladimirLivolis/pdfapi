@@ -71,8 +71,8 @@ public class PdfService {
                 protected PdfWriter getNextPdfWriter(PageRange documentPageRange) {
                     try {
                         return new PdfWriter(String.format("%s%s%d.pdf",pdfConfig.getOutputFolder(), fileName, partNumber++));
-                    } catch (final FileNotFoundException ex) {
-                        throw new PdfErrorException(ex.getMessage());
+                    } catch (final IOException ex) {
+                        throw new PdfErrorException(ex.getMessage(), ex);
                     }
                 }
             };
@@ -97,8 +97,8 @@ public class PdfService {
                 protected PdfWriter getNextPdfWriter(PageRange documentPageRange) {
                     try {
                         return new PdfWriter(String.format("%sextractedPages_%s.pdf", pdfConfig.getOutputFolder(), timestamp()));
-                    } catch (final FileNotFoundException ex) {
-                        throw new PdfErrorException(ex.getMessage());
+                    } catch (final IOException ex) {
+                        throw new PdfErrorException(ex.getMessage(), ex);
                     }
                 }
             };
@@ -147,7 +147,7 @@ public class PdfService {
 
                 ImageData imageData = ImageDataFactory.create(currentFile.getBytes());
                 Image image = new Image(imageData);
-                image.setWidth(pdfDocument.getDefaultPageSize().getWidth() - 50);
+                image.setWidth(pdfDocument.getDefaultPageSize().getWidth() - 50); // 50-point margin on each side
                 image.setAutoScaleHeight(true);
 
                 document.add(image);
