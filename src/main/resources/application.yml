@@ -1,0 +1,76 @@
+# Application Configuration
+spring:
+  application:
+    name: pdfapi
+
+  # Multipart file upload limits
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+# PDF API Configuration
+pdfapi:
+  output_folder: ${PDF_OUTPUT_FOLDER:./output/}
+
+# Security Configuration
+security:
+  users:
+    user:
+      username: ${SECURITY_USER_USERNAME:user}
+      password: ${SECURITY_USER_PASSWORD}
+      roles: USER
+    admin:
+      username: ${SECURITY_ADMIN_USERNAME:admin}
+      password: ${SECURITY_ADMIN_PASSWORD}
+      roles: USER,ADMIN
+
+# Resilience4j Rate Limiter Configuration
+resilience4j:
+  ratelimiter:
+    instances:
+      pdfapi:
+        limit-for-period: 10           # Number of requests allowed per period
+        limit-refresh-period: 1m       # Period duration (1 minute)
+        timeout-duration: 5s           # How long to wait for permission
+        register-health-indicator: true
+        event-consumer-buffer-size: 100
+
+      pdfapi-heavy:
+        limit-for-period: 3            # Stricter limit for heavy operations
+        limit-refresh-period: 1m
+        timeout-duration: 5s
+        register-health-indicator: true
+
+  # Circuit Breaker for additional resilience (optional)
+  circuitbreaker:
+    instances:
+      pdfapi:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        wait-duration-in-open-state: 30s
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 100
+        slow-call-duration-threshold: 60s
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,ratelimiters
+  endpoint:
+    health:
+      show-details: when-authorized
+  health:
+    ratelimiters:
+      enabled: true
+
+# Logging
+logging:
+  level:
+    com.pdf.pdfapi: INFO
+    org.springframework.security: INFO
+    io.github.resilience4j: DEBUG

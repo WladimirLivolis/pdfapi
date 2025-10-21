@@ -1,6 +1,7 @@
 package com.pdf.pdfapi.exception;
 
 import com.pdf.pdfapi.dto.ErrorResponse;
+import io.github.resilience4j.ratelimiter.RequestNotPermitted;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.http.HttpStatus;
@@ -82,6 +83,21 @@ public class GlobalExceptionHandler {
                 .build();
 
         return ResponseEntity.badRequest().body(errorResponse);
+    }
+
+    @ExceptionHandler(RequestNotPermitted.class)
+    public ResponseEntity<ErrorResponse> handleRateLimitExceeded(RequestNotPermitted ex, HttpServletRequest request) {
+        log.warn("Rate limit exceeded for request: {}", request.getRequestURI());
+
+        ErrorResponse errorResponse = ErrorResponse.builder()
+                .status("error")
+                .message("Too many requests. Please try again later.")
+                .error("RATE_LIMIT_EXCEEDED")
+                .path(request.getRequestURI())
+                .timestamp(java.time.LocalDateTime.now())
+                .build();
+
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS).body(errorResponse);
     }
 
     @ExceptionHandler(Exception.class)

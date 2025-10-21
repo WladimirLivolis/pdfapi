@@ -4,6 +4,7 @@ import com.pdf.pdfapi.dto.PdfOperationResponse;
 import com.pdf.pdfapi.dto.PdfResult;
 import com.pdf.pdfapi.service.PdfService;
 import com.pdf.pdfapi.validator.PdfFileValidator;
+import io.github.resilience4j.ratelimiter.annotation.RateLimiter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.Resource;
@@ -27,6 +28,7 @@ public class PdfController {
     private final PdfFileValidator validator;
 
     @PostMapping("/merge")
+    @RateLimiter(name = "pdfapi-heavy")
     public ResponseEntity<Resource> merge(@RequestParam MultipartFile... file) {
         validator.validatePdfFiles(file);
         PdfResult result = pdfService.merge(file);
@@ -34,6 +36,7 @@ public class PdfController {
     }
 
     @PostMapping("/split")
+    @RateLimiter(name = "pdfapi-heavy")
     public ResponseEntity<List<PdfOperationResponse>> split(@RequestParam MultipartFile file, @RequestParam Integer maxPageCount) {
         validator.validatePdfFile(file);
         List<PdfResult> results = pdfService.split(file, maxPageCount);
@@ -53,6 +56,7 @@ public class PdfController {
     }
 
     @PostMapping("/extract")
+    @RateLimiter(name = "pdfapi")
     public ResponseEntity<Resource> extract(@RequestParam MultipartFile file,
                                             @RequestParam Integer startPage,
                                             @RequestParam Integer endPage) {
@@ -62,6 +66,7 @@ public class PdfController {
     }
 
     @PostMapping("/remove")
+    @RateLimiter(name = "pdfapi")
     public ResponseEntity<Resource> remove(@RequestParam MultipartFile file, @RequestParam Integer... page) {
         validator.validatePdfFile(file);
         PdfResult result = pdfService.remove(file, page);
@@ -69,6 +74,7 @@ public class PdfController {
     }
 
     @PostMapping("/convertImageToPDF")
+    @RateLimiter(name = "pdfapi-heavy")
     public ResponseEntity<List<PdfOperationResponse>> convertImageToPDF(@RequestParam MultipartFile... file) {
         validator.validateImageFiles(file);
         List<PdfResult> results = pdfService.convertImageToPDF(file);

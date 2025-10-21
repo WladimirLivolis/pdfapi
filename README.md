@@ -1,67 +1,274 @@
 # PDF API
 
-This is a spring boot api for working with PDF files. It is based on [IText library][itext].
+A production-ready Spring Boot API for working with PDF files. Built with security, scalability, and best practices in mind.
 
-The following operations are currently supported:
-  - Merge multiple PDFs
-  - Split a PDF
-  - Extract pages from a PDF
-  - Remove pages form a PDF  
-  - Convert multiple image files to PDFs
+Based on [iText library][itext] | Java 21 | Spring Boot 3.5.6
 
-## Merge
+## Features
 
-**URL**:
-```
-POST /pdfapi/merge
-```
+- ✅ **5 PDF Operations**: Merge, Split, Extract, Remove pages, Image to PDF conversion
+- 🔐 **Secure**: HTTP Basic Auth, BCrypt passwords, CORS, Security headers
+- 🛡️ **Rate Limited**: Protection against abuse (3-10 requests/minute)
+- ✅ **Validated**: Input validation for file types, sizes, and parameters
+- 📊 **Observable**: Health checks, metrics via Spring Actuator
+- 🚀 **Modern**: Java 21, REST API with proper HTTP status codes
 
-**Form-data Params**: ```file```. 
+---
 
-It merges multiples files tagged with ```file``` into a new PDF.
+## 🚀 Quick Start
 
-## Split
+### 1. Prerequisites
 
-**URL**:
-```
-POST /pdfapi/split
-```
- 
-**Form-data Params**: ```file``` and ```maxPageCount```. 
- 
-It creates a new PDF per ```maxPageCount``` pages from ```file```.
+- Java 21+
+- Maven 3.9+
 
-## Extract
+### 2. Environment Setup
 
-**URL**
-```
-POST /pdfapi/extract
+**Copy the example environment file:**
+```bash
+cp .env.example .env
 ```
 
-**Form-data params**: ```file```, ```startPage``` and ```endPage```.
-
-It creates a new PDF containing the pages from ```startPage``` to ```endPage``` from ```file```.
-
-## Remove
-
-**URL**
-```
-POST /pdfapi/remove
+**Edit `.env` and set your secure passwords:**
+```env
+SECURITY_USER_PASSWORD=your_secure_user_password
+SECURITY_ADMIN_PASSWORD=your_secure_admin_password
 ```
 
-**Form-data params**: ```file``` and ```page```.
+⚠️ **IMPORTANT**: Never commit the `.env` file to git. It's already in `.gitignore`.
 
-It creates a copy of ```file``` and removes each page number tagged with ```page```. 
+### 3. Run the Application
 
-## Convert Image To PDF
- 
-**URL**:
+```bash
+./mvnw spring-boot:run
 ```
-POST /pdfapi/convertImageToPDF
+
+The API will be available at `http://localhost:8080`
+
+### 4. Test Authentication
+
+```bash
+# Health check (public endpoint)
+curl http://localhost:8080/actuator/health
+
+# Merge PDFs (requires authentication)
+curl -u user:your_secure_user_password \
+  -F "file=@file1.pdf" \
+  -F "file=@file2.pdf" \
+  http://localhost:8080/pdfapi/merge \
+  --output merged.pdf
 ```
- 
-**Form-data Params**: ```file```.
- 
-It converts each image file tagged with ```file``` into a PDF.
- 
+
+---
+
+## 🔐 Security
+
+### Authentication
+
+All `/pdfapi/**` endpoints require HTTP Basic Authentication.
+
+**Default users** (configure via `.env`):
+- **user**: Regular user with `USER` role
+- **admin**: Admin user with `USER` and `ADMIN` roles
+
+**Public endpoints** (no auth required):
+- `/actuator/health`
+- `/swagger-ui/**`
+- `/v3/api-docs/**`
+
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `SECURITY_USER_PASSWORD` | ✅ Yes | - | Password for the user account |
+| `SECURITY_ADMIN_PASSWORD` | ✅ Yes | - | Password for the admin account |
+| `SECURITY_USER_USERNAME` | No | `user` | Username for user account |
+| `SECURITY_ADMIN_USERNAME` | No | `admin` | Username for admin account |
+| `PDF_OUTPUT_FOLDER` | No | `./output/` | Output folder for PDFs |
+
+---
+
+## 📖 API Operations
+
+All endpoints require authentication. Add `-u username:password` to your requests.
+
+### 1. Merge PDFs
+
+Combine multiple PDF files into one.
+
+**Endpoint:** `POST /pdfapi/merge`
+**Rate Limit:** 3 requests/minute
+
+**Parameters:**
+- `file` (multipart): 2 or more PDF files
+
+**Example:**
+```bash
+curl -u user:password \
+  -F "file=@file1.pdf" \
+  -F "file=@file2.pdf" \
+  http://localhost:8080/pdfapi/merge \
+  --output merged.pdf
+```
+
+---
+
+### 2. Split PDF
+
+Split a PDF into multiple files based on page count.
+
+**Endpoint:** `POST /pdfapi/split`
+**Rate Limit:** 3 requests/minute
+
+**Parameters:**
+- `file` (multipart): PDF file to split
+- `maxPageCount` (integer): Maximum pages per output file
+
+**Example:**
+```bash
+curl -u user:password \
+  -F "file=@document.pdf" \
+  -F "maxPageCount=5" \
+  http://localhost:8080/pdfapi/split
+```
+
+**Response:**
+```json
+[
+  {
+    "status": "success",
+    "message": "PDF split successfully",
+    "fileName": "splitDocument_20251021_1.pdf",
+    "fileSizeBytes": 51234,
+    "pageCount": 5
+  }
+]
+```
+
+---
+
+### 3. Extract Pages
+
+Extract a specific range of pages from a PDF.
+
+**Endpoint:** `POST /pdfapi/extract`
+**Rate Limit:** 10 requests/minute
+
+**Parameters:**
+- `file` (multipart): Source PDF file
+- `startPage` (integer): First page to extract (1-indexed)
+- `endPage` (integer): Last page to extract (1-indexed)
+
+**Example:**
+```bash
+curl -u user:password \
+  -F "file=@document.pdf" \
+  -F "startPage=5" \
+  -F "endPage=10" \
+  http://localhost:8080/pdfapi/extract \
+  --output extracted.pdf
+```
+
+---
+
+### 4. Remove Pages
+
+Remove specific pages from a PDF.
+
+**Endpoint:** `POST /pdfapi/remove`
+**Rate Limit:** 10 requests/minute
+
+**Parameters:**
+- `file` (multipart): Source PDF file
+- `page` (integer, multiple): Page numbers to remove (1-indexed)
+
+**Example:**
+```bash
+curl -u user:password \
+  -F "file=@document.pdf" \
+  -F "page=2" \
+  -F "page=5" \
+  -F "page=7" \
+  http://localhost:8080/pdfapi/remove \
+  --output result.pdf
+```
+
+---
+
+### 5. Convert Images to PDF
+
+Convert image files (PNG, JPG, etc.) to PDF format.
+
+**Endpoint:** `POST /pdfapi/convertImageToPDF`
+**Rate Limit:** 3 requests/minute
+
+**Parameters:**
+- `file` (multipart): One or more image files
+
+**Example:**
+```bash
+curl -u user:password \
+  -F "file=@image1.png" \
+  -F "file=@image2.jpg" \
+  http://localhost:8080/pdfapi/convertImageToPDF
+```
+
+---
+
+## 🛡️ Rate Limiting
+
+To protect against abuse, the API enforces rate limits:
+
+| Endpoint | Limit |
+|----------|-------|
+| merge, split, convertImageToPDF | 3 requests/minute |
+| extract, remove | 10 requests/minute |
+
+**When limit exceeded:**
+```json
+{
+  "status": "error",
+  "message": "Too many requests. Please try again later.",
+  "error": "RATE_LIMIT_EXCEEDED",
+  "timestamp": "2025-10-21T01:11:08"
+}
+```
+
+HTTP Status: `429 Too Many Requests`
+
+---
+
+## 📊 Monitoring
+
+### Health Check
+```bash
+curl http://localhost:8080/actuator/health
+```
+
+### Metrics (requires authentication)
+```bash
+curl -u admin:password http://localhost:8080/actuator/metrics
+curl -u admin:password http://localhost:8080/actuator/ratelimiters
+```
+
+---
+
+## 🧪 Testing
+
+Run all tests:
+```bash
+./mvnw test
+```
+
+Run with coverage:
+```bash
+./mvnw test jacoco:report
+```
+
+---
+
+## 📝 License
+
+This project uses the [iText library][itext] for PDF manipulation.
+
    [itext]: <http://itextpdf.com/en>

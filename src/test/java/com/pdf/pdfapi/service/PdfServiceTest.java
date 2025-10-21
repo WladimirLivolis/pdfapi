@@ -20,7 +20,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
@@ -34,7 +33,7 @@ class PdfServiceTest {
     private PdfService pdfService;
 
     @BeforeEach
-    public void init() {
+    void init() {
         // No longer need to delete temporary files since we don't save to disk
         lenient().when(pdfConfig.getOutputFolder()).thenReturn("./output/");
     }
