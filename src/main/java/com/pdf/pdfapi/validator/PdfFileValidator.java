@@ -26,7 +26,7 @@ public class PdfFileValidator {
             "image/tiff"
     );
 
-    private static final long MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+    private static final long MAX_FILE_SIZE = 100L * 1024 * 1024; // 100MB
 
     public void validatePdfFile(MultipartFile file) {
         if (file == null || file.isEmpty()) {

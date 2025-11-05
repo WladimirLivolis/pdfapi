@@ -16,9 +16,11 @@ public record ErrorResponse(
         String path,
         LocalDateTime timestamp
 ) {
+    private static final String ERROR_STATUS = "error";
+
     public static ErrorResponse of(String message) {
         return ErrorResponse.builder()
-                .status("error")
+                .status(ERROR_STATUS)
                 .message(message)
                 .timestamp(LocalDateTime.now())
                 .build();
@@ -26,7 +28,7 @@ public record ErrorResponse(
 
     public static ErrorResponse of(String message, String error) {
         return ErrorResponse.builder()
-                .status("error")
+                .status(ERROR_STATUS)
                 .message(message)
                 .error(error)
                 .timestamp(LocalDateTime.now())
@@ -35,7 +37,7 @@ public record ErrorResponse(
 
     public static ErrorResponse of(String message, List<String> details) {
         return ErrorResponse.builder()
-                .status("error")
+                .status(ERROR_STATUS)
                 .message(message)
                 .details(details)
                 .timestamp(LocalDateTime.now())

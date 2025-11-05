@@ -10,7 +10,11 @@ Este documento registra o plano de evolução do projeto PDF API, transformando-
 
 - [x] **Fase 1** - Produção Básica (1-2 semanas) ✅ **CONCLUÍDA**
 - [x] **Fase 2** - Segurança e Escalabilidade (2-4 semanas) ✅ **CONCLUÍDA**
-- [ ] **Fase 3** - Novas Funcionalidades (1-2 meses)
+- [ ] **Fase 3** - Novas Funcionalidades (1-2 meses) 🚧 **EM PROGRESSO**
+  - [x] **Fase 3A** - Quick Wins ✅ **CONCLUÍDA**
+  - [ ] **Fase 3B** - High Impact
+  - [ ] **Fase 3C** - Advanced Features
+  - [ ] **Fase 3D** - Specialized
 - [ ] **Fase 4** - Observabilidade e DevOps (Contínuo)
 
 ---
@@ -172,7 +176,312 @@ Adicionar camadas de segurança e preparar a API para alto volume de requisiçõ
 ### Objetivo
 Expandir as capacidades da API com funcionalidades avançadas de PDF.
 
-### Tarefas
+### ⚠️ **IMPORTANTE - Política de Licenciamento**
+
+**APENAS bibliotecas Open Source e gratuitas serão utilizadas:**
+- ✅ **iText Community (AGPL)** - Já em uso, continuar utilizando
+- ✅ **Apache PDFBox** - Apache License 2.0 (permissiva)
+- ✅ **Tesseract OCR** - Apache License 2.0 (permissiva)
+- ❌ **iText Commercial** - Licença paga (NÃO usar)
+- ❌ **Qualquer biblioteca proprietária** - NÃO usar
+
+**Princípio:** Se uma funcionalidade requer biblioteca paga, ela será descartada ou implementada com alternativa open source.
+
+---
+
+### 📊 Status Atual das Funcionalidades
+
+**5 operações implementadas:**
+1. ✅ Merge PDFs
+2. ✅ Split PDF
+3. ✅ Extract Pages
+4. ✅ Remove Pages
+5. ✅ Image to PDF
+
+---
+
+### 🎯 Subfases de Implementação
+
+A Fase 3 foi dividida em subfases para facilitar a implementação incremental:
+
+---
+
+## **FASE 3A - Quick Wins** (1-2 semanas) 🚀 ✅ **CONCLUÍDA**
+
+**Objetivo:** Implementar funcionalidades fáceis e úteis para resultados rápidos.
+
+**Dificuldade:** ⭐ Fácil a ⭐⭐ Média
+**Impacto:** ⭐⭐⭐⭐ Alto
+**Bibliotecas:** iText Community (já instalada)
+
+### Funcionalidades:
+
+#### 3A.1 Rotate Pages (Rotação de Páginas) ✅
+- [x] Endpoint POST `/pdfapi/rotate`
+- [x] Rotação de páginas específicas ou todas
+- [x] Suporte para 90°, 180°, 270°, -90° e múltiplos de 90°
+- [x] Parâmetros: `file`, `pages` (opcional), `rotation`
+- [x] Normalização automática de ângulos (360° = 0°, -90° = 270°)
+
+**Complexidade:** ⭐ Fácil
+**Biblioteca:** iText Community
+**Estimativa:** 2-3 horas
+
+**Implementação:**
+- Método `PdfService.rotate()` implementado
+- Validação de ângulos (múltiplos de 90°)
+- Rotação relativa (adiciona ao ângulo atual da página)
+- Rate limiting: `pdfapi` (10 req/min)
+
+#### 3A.2 PDF Info (Informações do PDF) ✅
+- [x] Endpoint POST `/pdfapi/info`
+- [x] Retornar: número de páginas, tamanho, versão PDF, dimensões
+- [x] Response JSON com metadados básicos
+- [x] Verifica se todas as páginas têm a mesma dimensão
+- [x] Dimensões da primeira página em pontos
+
+**Complexidade:** ⭐ Fácil
+**Biblioteca:** iText Community
+**Estimativa:** 1-2 horas
+
+**Implementação:**
+- DTO `PdfInfoResponse` criado
+- Método `PdfService.getInfo()` implementado
+- Retorna: pageCount, fileSizeBytes, pdfVersion, firstPageDimensions, allPagesSameDimension
+- Rate limiting: `pdfapi` (10 req/min)
+
+#### 3A.3 PDF Metadata (Metadados) ✅
+- [x] Endpoint POST `/pdfapi/metadata` - ler metadados
+- [x] Endpoint PUT `/pdfapi/metadata` - atualizar metadados
+- [x] Informações: título, autor, assunto, palavras-chave, criador, produtor
+- [x] Datas: criação, modificação
+
+**Complexidade:** ⭐ Fácil
+**Biblioteca:** iText Community
+**Estimativa:** 2-3 horas
+
+**Implementação:**
+- DTOs `PdfMetadataResponse` e `PdfMetadataRequest` criados
+- Método `PdfService.getMetadata()` implementado para leitura
+- Método `PdfService.updateMetadata()` implementado para atualização
+- Campos opcionais na atualização (apenas campos fornecidos são alterados)
+- Rate limiting: `pdfapi` (10 req/min)
+
+#### 3A.4 Add Page Numbers (Numeração de Páginas) ✅
+- [x] Endpoint POST `/pdfapi/addPageNumbers`
+- [x] Adicionar números de página
+- [x] Configuração: posição (topo/rodapé, esquerda/centro/direita)
+- [x] Formato customizável (ex: "Page {current} of {total}", "{page}", etc.)
+- [x] Range de páginas (opcional)
+- [x] Suporte para 9 posições: top-left, top-center, top-right, bottom-left, bottom-center, bottom-right
+
+**Complexidade:** ⭐⭐ Média
+**Biblioteca:** iText Community
+**Estimativa:** 3-4 horas
+
+**Implementação:**
+- Método `PdfService.addPageNumbers()` implementado
+- Posição padrão: `bottom-center`
+- Formato padrão: `Page {current} of {total}`
+- Placeholders suportados: `{current}`, `{total}`, `{page}`
+- Font size: 10pt, cor: preto
+- Rate limiting: `pdfapi` (10 req/min)
+
+**Total Fase 3A:** ~8-12 horas de desenvolvimento ✅ **CONCLUÍDO**
+
+---
+
+## **FASE 3B - High Impact** (2-3 semanas) 🔥
+
+**Objetivo:** Implementar funcionalidades mais complexas mas muito solicitadas.
+
+**Dificuldade:** ⭐⭐ Média a ⭐⭐⭐ Difícil
+**Impacto:** ⭐⭐⭐⭐⭐ Muito Alto
+**Bibliotecas:** iText Community
+
+### Funcionalidades:
+
+#### 3B.1 Watermark (Marca d'água)
+- [ ] Endpoint POST `/pdfapi/watermark`
+- [ ] Suporte para texto como watermark
+- [ ] Suporte para imagem como watermark
+- [ ] Configuração: posição, opacidade, rotação, escala
+- [ ] Aplicar em todas as páginas ou páginas específicas
+- [ ] Configurar camada (frente/fundo)
+
+**Complexidade:** ⭐⭐ Média
+**Biblioteca:** iText Community
+**Estimativa:** 6-8 horas
+
+#### 3B.2 Compress PDF (Compressão)
+- [ ] Endpoint POST `/pdfapi/compress`
+- [ ] Diferentes níveis: LOW, MEDIUM, HIGH
+- [ ] Compressão de imagens embutidas
+- [ ] Remoção de objetos duplicados
+- [ ] Relatório: tamanho original vs comprimido, % redução
+- [ ] Opção de qualidade de imagem
+
+**Complexidade:** ⭐⭐⭐ Difícil
+**Biblioteca:** iText Community
+**Estimativa:** 8-10 horas
+
+#### 3B.3 Encrypt/Password (Criptografia)
+- [ ] Endpoint POST `/pdfapi/encrypt`
+- [ ] Adicionar senha de abertura (user password)
+- [ ] Adicionar senha de permissões (owner password)
+- [ ] Configurar permissões: impressão, cópia, edição, anotações
+- [ ] Níveis de criptografia: 40-bit, 128-bit, 256-bit AES
+- [ ] Endpoint POST `/pdfapi/decrypt` (remover senha com permissão)
+
+**Complexidade:** ⭐⭐ Média
+**Biblioteca:** iText Community
+**Estimativa:** 6-8 horas
+
+#### 3B.4 Optimize PDF (Otimização)
+- [ ] Endpoint POST `/pdfapi/optimize`
+- [ ] Linearização para fast web view
+- [ ] Compressão + remoção de redundâncias
+- [ ] Otimização de fontes
+- [ ] Ideal para publicação web
+
+**Complexidade:** ⭐⭐⭐ Difícil
+**Biblioteca:** iText Community
+**Estimativa:** 8-10 horas
+
+**Total Fase 3B:** ~28-36 horas de desenvolvimento
+
+---
+
+## **FASE 3C - Advanced Features** (3-4 semanas) 📊
+
+**Objetivo:** Funcionalidades avançadas que agregam diferencial competitivo.
+
+**Dificuldade:** ⭐⭐⭐ Difícil
+**Impacto:** ⭐⭐⭐⭐ Alto
+**Bibliotecas:** Apache PDFBox (nova dependência)
+
+### Funcionalidades:
+
+#### 3C.1 PDF to Images (PDF para Imagens)
+- [ ] Endpoint POST `/pdfapi/toImages`
+- [ ] Suporte para PNG, JPG
+- [ ] Configuração de DPI (72, 150, 300)
+- [ ] Configuração de qualidade JPEG (0-100)
+- [ ] Retornar ZIP com todas as imagens
+- [ ] Opção de converter páginas específicas
+
+**Complexidade:** ⭐⭐⭐ Difícil
+**Biblioteca:** Apache PDFBox
+**Estimativa:** 10-12 horas
+
+#### 3C.2 Extract Images (Extrair Imagens)
+- [ ] Endpoint POST `/pdfapi/extractImages`
+- [ ] Extrair todas as imagens embutidas no PDF
+- [ ] Retornar ZIP com imagens
+- [ ] Metadados: página de origem, dimensões, formato
+- [ ] Filtro por tamanho mínimo (evitar ícones pequenos)
+
+**Complexidade:** ⭐⭐ Média
+**Biblioteca:** Apache PDFBox ou iText
+**Estimativa:** 6-8 horas
+
+#### 3C.3 Crop Pages (Cortar Páginas)
+- [ ] Endpoint POST `/pdfapi/crop`
+- [ ] Definir área de corte: x, y, width, height
+- [ ] Aplicar a páginas específicas ou todas
+- [ ] Presets: remover margens, centralizar conteúdo
+
+**Complexidade:** ⭐⭐ Média
+**Biblioteca:** iText Community
+**Estimativa:** 5-6 horas
+
+#### 3C.4 Fill Forms (Preencher Formulários)
+- [ ] Endpoint POST `/pdfapi/fillForm`
+- [ ] Aceitar JSON com campos e valores
+- [ ] Suporte para campos de texto, checkbox, radio button
+- [ ] Opção de "flatten" (tornar não-editável)
+- [ ] Validação de campos obrigatórios
+
+**Complexidade:** ⭐⭐⭐ Difícil
+**Biblioteca:** iText Community
+**Estimativa:** 10-12 horas
+
+#### 3C.5 Merge with Bookmarks (Merge com Índice)
+- [ ] Melhorar endpoint `/pdfapi/merge` existente
+- [ ] Adicionar parâmetro `createBookmarks=true`
+- [ ] Criar bookmark para cada PDF mesclado
+- [ ] Usar nome do arquivo como título do bookmark
+
+**Complexidade:** ⭐⭐ Média
+**Biblioteca:** iText Community
+**Estimativa:** 4-5 horas
+
+**Total Fase 3C:** ~35-43 horas de desenvolvimento
+
+---
+
+## **FASE 3D - Specialized** (apenas se necessário) ⚠️
+
+**Objetivo:** Funcionalidades especializadas e de nicho.
+
+**Dificuldade:** ⭐⭐⭐⭐⭐ Muito Difícil
+**Impacto:** ⭐⭐⭐ Médio (nicho específico)
+**Bibliotecas:** Tesseract OCR (dependência externa pesada)
+
+### Funcionalidades:
+
+#### 3D.1 OCR (Reconhecimento Óptico de Caracteres)
+- [ ] Integração com Tesseract OCR
+- [ ] Endpoint POST `/pdfapi/ocr`
+- [ ] Suporte para múltiplos idiomas (por, eng, spa)
+- [ ] Retornar PDF pesquisável (searchable PDF)
+- [ ] Opção de retornar apenas texto extraído
+- [ ] **ATENÇÃO:** Processamento muito pesado, considerar async obrigatório
+
+**Complexidade:** ⭐⭐⭐⭐⭐ Muito Difícil
+**Biblioteca:** Tesseract OCR (externa)
+**Estimativa:** 20-30 horas
+**Requisitos:**
+- Tesseract instalado no servidor
+- Linguagem data files
+- Processamento assíncrono obrigatório
+- Rate limiting muito restritivo (1 req/5min)
+
+**Nota:** Implementar APENAS se houver demanda específica. Considerar alternativas como serviços externos (OCR.space API, Google Vision API) se viável.
+
+**Total Fase 3D:** ~20-30 horas de desenvolvimento
+
+---
+
+### 📊 Resumo das Subfases
+
+| Subfase | Funcionalidades | Dificuldade | Tempo Estimado | Prioridade |
+|---------|-----------------|-------------|----------------|------------|
+| **3A** | 4 features (Rotate, Info, Metadata, Page Numbers) | ⭐-⭐⭐ | 8-12h | 🔥 **MUITO ALTA** |
+| **3B** | 4 features (Watermark, Compress, Encrypt, Optimize) | ⭐⭐-⭐⭐⭐ | 28-36h | 🔥 **ALTA** |
+| **3C** | 5 features (To Images, Extract Images, Crop, Forms, Bookmarks) | ⭐⭐-⭐⭐⭐ | 35-43h | 📊 **MÉDIA** |
+| **3D** | 1 feature (OCR) | ⭐⭐⭐⭐⭐ | 20-30h | ⚠️ **BAIXA** |
+
+**Total:** 18 novas funcionalidades potenciais
+
+---
+
+### 🎯 Recomendação de Implementação
+
+**Próxima Sessão: Começar com FASE 3A** ✅
+
+**Motivos:**
+1. ✅ Resultados rápidos (4 features em 8-12h)
+2. ✅ Baixo risco de problemas
+3. ✅ Usa apenas bibliotecas já instaladas (iText)
+4. ✅ Alta utilidade para usuários
+5. ✅ Boa base para testar padrões antes das features complexas
+
+**Após 3A:** Avaliar feedback e priorizar 3B ou 3C baseado na demanda.
+
+---
+
+### Tarefas Originais (Referência)
 
 #### 3.1 Adicionar Marca D'água (Watermark)
 - [ ] Endpoint POST `/pdfapi/watermark`
@@ -285,8 +594,8 @@ Garantir visibilidade, monitoramento e automação de deploy.
 - [x] Infraestrutura de processamento assíncrono disponível
 
 ### Fase 3
-- [ ] Mínimo 8 operações de PDF disponíveis
-- [ ] Testes de integração para todas as novas funcionalidades
+- [x] Mínimo 8 operações de PDF disponíveis (9 operações implementadas)
+- [ ] Testes de integração para todas as novas funcionalidades (em andamento)
 
 ### Fase 4
 - [ ] Tempo de deploy <5 minutos
@@ -381,6 +690,35 @@ Garantir visibilidade, monitoramento e automação de deploy.
 
 ---
 
+**Sessão 3 - Fase 3A:**
+- ✅ **Fase 3A CONCLUÍDA** (todas as 4 funcionalidades implementadas e testadas)
+  - ✅ Rotate Pages: rotação de páginas específicas ou todas, múltiplos de 90°
+  - ✅ PDF Info: extração de informações do PDF (páginas, tamanho, versão, dimensões)
+  - ✅ PDF Metadata: leitura e atualização de metadados (título, autor, subject, etc.)
+  - ✅ Add Page Numbers: adição de numeração de páginas com posição e formato customizáveis
+  - ✅ Build compilando sem erros
+  - ✅ Todos os 11 testes passando
+  - ✅ 4 novos endpoints implementados
+  - ✅ 3 novos DTOs criados (PdfInfoResponse, PdfMetadataResponse, PdfMetadataRequest)
+
+**Arquivos Criados (Fase 3A):**
+- `src/main/java/com/pdf/pdfapi/dto/PdfInfoResponse.java`
+- `src/main/java/com/pdf/pdfapi/dto/PdfMetadataResponse.java`
+- `src/main/java/com/pdf/pdfapi/dto/PdfMetadataRequest.java`
+
+**Arquivos Modificados (Fase 3A):**
+- `src/main/java/com/pdf/pdfapi/service/PdfService.java` (4 novos métodos)
+- `src/main/java/com/pdf/pdfapi/controller/PdfController.java` (5 novos endpoints)
+
+**Novos Endpoints:**
+1. `POST /pdfapi/rotate` - Rotacionar páginas
+2. `POST /pdfapi/info` - Obter informações do PDF
+3. `POST /pdfapi/metadata` - Obter metadados do PDF
+4. `PUT /pdfapi/metadata` - Atualizar metadados do PDF
+5. `POST /pdfapi/addPageNumbers` - Adicionar números de página
+
+---
+
 ## 📝 Notas
 
 - Este roadmap é um documento vivo e deve ser atualizado conforme o projeto evolui
@@ -390,4 +728,4 @@ Garantir visibilidade, monitoramento e automação de deploy.
 
 ---
 
-**Última atualização:** 2025-10-21
+**Última atualização:** 2025-11-04 - Fase 3A Concluída
