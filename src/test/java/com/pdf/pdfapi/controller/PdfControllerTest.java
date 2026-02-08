@@ -11,6 +11,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.mockito.Mockito.*;
 
@@ -27,8 +28,9 @@ class PdfControllerTest {
     private PdfController pdfController;
 
     @Test
-    void test_merge() {
+    void testMerge() {
         MultipartFile file = mock(MultipartFile.class);
+        MultipartFile[] files = {file};
         PdfResult mockResult = PdfResult.builder()
                 .content(new byte[]{1, 2, 3})
                 .suggestedFileName("merged.pdf")
@@ -36,16 +38,35 @@ class PdfControllerTest {
                 .pageCount(1)
                 .build();
 
-        when(pdfService.merge(file)).thenReturn(mockResult);
+        when(pdfService.merge(null, files)).thenReturn(mockResult);
 
-        pdfController.merge(file);
+        pdfController.merge(files, null);
 
-        verify(validator, times(1)).validatePdfFiles(file);
-        verify(pdfService, times(1)).merge(file);
+        verify(validator, times(1)).validatePdfFiles(files);
+        verify(pdfService, times(1)).merge(null, files);
     }
 
     @Test
-    void test_split() {
+    void testMergeWithBookmarks() {
+        MultipartFile file = mock(MultipartFile.class);
+        MultipartFile[] files = {file};
+        PdfResult mockResult = PdfResult.builder()
+                .content(new byte[]{1, 2, 3})
+                .suggestedFileName("merged.pdf")
+                .sizeInBytes(3)
+                .pageCount(1)
+                .build();
+
+        when(pdfService.merge(true, files)).thenReturn(mockResult);
+
+        pdfController.merge(files, true);
+
+        verify(validator, times(1)).validatePdfFiles(files);
+        verify(pdfService, times(1)).merge(true, files);
+    }
+
+    @Test
+    void testSplit() {
         MultipartFile file = mock(MultipartFile.class);
         PdfResult mockResult = PdfResult.builder()
                 .content(new byte[]{1, 2, 3})
@@ -63,7 +84,7 @@ class PdfControllerTest {
     }
 
     @Test
-    void test_extract() {
+    void testExtract() {
         MultipartFile file = mock(MultipartFile.class);
         PdfResult mockResult = PdfResult.builder()
                 .content(new byte[]{1, 2, 3})
@@ -81,7 +102,7 @@ class PdfControllerTest {
     }
 
     @Test
-    void test_remove() {
+    void testRemove() {
         MultipartFile file = mock(MultipartFile.class);
         PdfResult mockResult = PdfResult.builder()
                 .content(new byte[]{1, 2, 3})
@@ -99,7 +120,7 @@ class PdfControllerTest {
     }
 
     @Test
-    void test_convertImageToPDF() {
+    void testConvertImageToPDF() {
         MultipartFile file = mock(MultipartFile.class);
         PdfResult mockResult = PdfResult.builder()
                 .content(new byte[]{1, 2, 3})
@@ -117,7 +138,7 @@ class PdfControllerTest {
     }
 
     @Test
-    void test_rotate() {
+    void testRotate() {
         MultipartFile file = mock(MultipartFile.class);
         Integer rotation = 90;
         Integer[] pages = {1, 2};
@@ -137,7 +158,7 @@ class PdfControllerTest {
     }
 
     @Test
-    void test_info() {
+    void testInfo() {
         MultipartFile file = mock(MultipartFile.class);
         PdfInfoResponse mockResponse = PdfInfoResponse.success(
                 2, 1024L, "1.7",
@@ -158,7 +179,7 @@ class PdfControllerTest {
     }
 
     @Test
-    void test_getMetadata() {
+    void testGetMetadata() {
         MultipartFile file = mock(MultipartFile.class);
         PdfMetadataResponse mockResponse = PdfMetadataResponse.success(
                 "Test Title", "Test Author", "Test Subject",
@@ -175,7 +196,7 @@ class PdfControllerTest {
     }
 
     @Test
-    void test_updateMetadata() {
+    void testUpdateMetadata() {
         MultipartFile file = mock(MultipartFile.class);
         String title = "New Title";
         String author = "New Author";
@@ -207,7 +228,7 @@ class PdfControllerTest {
     }
 
     @Test
-    void test_addPageNumbers() {
+    void testAddPageNumbers() {
         MultipartFile file = mock(MultipartFile.class);
         String position = "bottom-center";
         String format = "Page {current} of {total}";
@@ -227,6 +248,216 @@ class PdfControllerTest {
 
         verify(validator, times(1)).validatePdfFile(file);
         verify(pdfService, times(1)).addPageNumbers(file, position, format, startPage, endPage);
+    }
+
+    @Test
+    void testWatermarkWithText() {
+        MultipartFile file = mock(MultipartFile.class);
+        String text = "CONFIDENTIAL";
+        String position = "center";
+        Float opacity = 0.3f;
+        Float rotation = 45.0f;
+        Float scale = 1.0f;
+        String layer = "foreground";
+        Integer startPage = 1;
+        Integer endPage = 10;
+
+        PdfResult mockResult = PdfResult.builder()
+                .content(new byte[]{1, 2, 3})
+                .suggestedFileName("watermarked.pdf")
+                .sizeInBytes(3)
+                .pageCount(10)
+                .build();
+
+        when(pdfService.watermark(file, text, null, position, opacity, rotation, scale, layer, startPage, endPage))
+                .thenReturn(mockResult);
+
+        pdfController.watermark(file, text, null, position, opacity, rotation, scale, layer, startPage, endPage);
+
+        verify(validator, times(1)).validatePdfFile(file);
+        verify(pdfService, times(1)).watermark(file, text, null, position, opacity, rotation, scale, layer, startPage, endPage);
+    }
+
+    @Test
+    void testWatermarkWithImage() {
+        MultipartFile file = mock(MultipartFile.class);
+        MultipartFile image = mock(MultipartFile.class);
+        String position = "top-right";
+        Float opacity = 0.5f;
+        Float rotation = 0.0f;
+        Float scale = 0.5f;
+        String layer = "background";
+
+        when(image.getContentType()).thenReturn("image/png");
+
+        PdfResult mockResult = PdfResult.builder()
+                .content(new byte[]{1, 2, 3})
+                .suggestedFileName("watermarked.pdf")
+                .sizeInBytes(3)
+                .pageCount(10)
+                .build();
+
+        when(pdfService.watermark(file, null, image, position, opacity, rotation, scale, layer, null, null))
+                .thenReturn(mockResult);
+
+        pdfController.watermark(file, null, image, position, opacity, rotation, scale, layer, null, null);
+
+        verify(validator, times(1)).validatePdfFile(file);
+        verify(pdfService, times(1)).watermark(file, null, image, position, opacity, rotation, scale, layer, null, null);
+    }
+
+    @Test
+    void testCompress() {
+        MultipartFile file = mock(MultipartFile.class);
+        String level = "MEDIUM";
+
+        PdfResult mockResult = PdfResult.builder()
+                .content(new byte[]{1, 2, 3})
+                .suggestedFileName("compressed_medium.pdf")
+                .sizeInBytes(3)
+                .pageCount(10)
+                .build();
+
+        when(pdfService.compress(file, level)).thenReturn(mockResult);
+
+        pdfController.compress(file, level);
+
+        verify(validator, times(1)).validatePdfFile(file);
+        verify(pdfService, times(1)).compress(file, level);
+    }
+
+    @Test
+    void testEncrypt() {
+        MultipartFile file = mock(MultipartFile.class);
+        String userPassword = "user123";
+        String ownerPassword = "owner456";
+        Integer encryptionType = 256;
+        Boolean allowPrinting = true;
+        Boolean allowModifying = false;
+        Boolean allowCopy = false;
+        Boolean allowAnnotations = false;
+
+        PdfResult mockResult = PdfResult.builder()
+                .content(new byte[]{1, 2, 3})
+                .suggestedFileName("encrypted.pdf")
+                .sizeInBytes(3)
+                .pageCount(10)
+                .build();
+
+        when(pdfService.encrypt(file, userPassword, ownerPassword, encryptionType,
+                allowPrinting, allowModifying, allowCopy, allowAnnotations))
+                .thenReturn(mockResult);
+
+        pdfController.encrypt(file, userPassword, ownerPassword, encryptionType,
+                allowPrinting, allowModifying, allowCopy, allowAnnotations);
+
+        verify(validator, times(1)).validatePdfFile(file);
+        verify(pdfService, times(1)).encrypt(file, userPassword, ownerPassword, encryptionType,
+                allowPrinting, allowModifying, allowCopy, allowAnnotations);
+    }
+
+    @Test
+    void testDecrypt() {
+        MultipartFile file = mock(MultipartFile.class);
+        String password = "password123";
+
+        PdfResult mockResult = PdfResult.builder()
+                .content(new byte[]{1, 2, 3})
+                .suggestedFileName("decrypted.pdf")
+                .sizeInBytes(3)
+                .pageCount(10)
+                .build();
+
+        when(pdfService.decrypt(file, password)).thenReturn(mockResult);
+
+        pdfController.decrypt(file, password);
+
+        verify(validator, times(1)).validatePdfFile(file);
+        verify(pdfService, times(1)).decrypt(file, password);
+    }
+
+    @Test
+    void testOptimize() {
+        MultipartFile file = mock(MultipartFile.class);
+
+        PdfResult mockResult = PdfResult.builder()
+                .content(new byte[]{1, 2, 3})
+                .suggestedFileName("optimized.pdf")
+                .sizeInBytes(3)
+                .pageCount(10)
+                .build();
+
+        when(pdfService.optimize(file)).thenReturn(mockResult);
+
+        pdfController.optimize(file);
+
+        verify(validator, times(1)).validatePdfFile(file);
+        verify(pdfService, times(1)).optimize(file);
+    }
+
+    @Test
+    void testToImages() {
+        MultipartFile file = mock(MultipartFile.class);
+        byte[] mockZip = new byte[]{1, 2, 3};
+
+        when(pdfService.toImages(file, "png", 150, null, null, null)).thenReturn(mockZip);
+
+        pdfController.toImages(file, "png", 150, null, null, null);
+
+        verify(validator, times(1)).validatePdfFile(file);
+        verify(pdfService, times(1)).toImages(file, "png", 150, null, null, null);
+    }
+
+    @Test
+    void testExtractImages() {
+        MultipartFile file = mock(MultipartFile.class);
+        byte[] mockZip = new byte[]{1, 2, 3};
+
+        when(pdfService.extractImages(file, 100, 100)).thenReturn(mockZip);
+
+        pdfController.extractImages(file, 100, 100);
+
+        verify(validator, times(1)).validatePdfFile(file);
+        verify(pdfService, times(1)).extractImages(file, 100, 100);
+    }
+
+    @Test
+    void testCrop() {
+        MultipartFile file = mock(MultipartFile.class);
+        PdfResult mockResult = PdfResult.builder()
+                .content(new byte[]{1, 2, 3})
+                .suggestedFileName("cropped.pdf")
+                .sizeInBytes(3)
+                .pageCount(1)
+                .build();
+
+        when(pdfService.crop(file, 0f, 0f, 500f, 700f, null, null)).thenReturn(mockResult);
+
+        pdfController.crop(file, 0f, 0f, 500f, 700f, null, null);
+
+        verify(validator, times(1)).validatePdfFile(file);
+        verify(pdfService, times(1)).crop(file, 0f, 0f, 500f, 700f, null, null);
+    }
+
+    @Test
+    void testFillForm() {
+        MultipartFile file = mock(MultipartFile.class);
+        PdfResult mockResult = PdfResult.builder()
+                .content(new byte[]{1, 2, 3})
+                .suggestedFileName("filled.pdf")
+                .sizeInBytes(3)
+                .pageCount(1)
+                .build();
+
+        String fieldsJson = "{\"name\":\"John\"}";
+        Map<String, String> fields = Map.of("name", "John");
+
+        when(pdfService.fillForm(file, fields, true)).thenReturn(mockResult);
+
+        pdfController.fillForm(file, fieldsJson, true);
+
+        verify(validator, times(1)).validatePdfFile(file);
+        verify(pdfService, times(1)).fillForm(eq(file), eq(fields), eq(true));
     }
 
 }

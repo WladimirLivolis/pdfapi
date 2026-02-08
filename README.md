@@ -6,8 +6,8 @@ Based on [iText library][itext] | Java 21 | Spring Boot 3.5.6
 
 ## Features
 
-- ✅ **9 PDF Operations**: Merge, Split, Extract, Remove pages, Image to PDF conversion, Rotate, Info, Metadata, Page Numbers
-- 🔐 **Secure**: HTTP Basic Auth, BCrypt passwords, CORS, Security headers
+- ✅ **13 PDF Operations**: Merge, Split, Extract, Remove pages, Image to PDF conversion, Rotate, Info, Metadata, Page Numbers, Watermark, Compress, Encrypt/Decrypt, Optimize
+- 🔐 **Secure**: HTTP Basic Auth, BCrypt passwords, CORS, Security headers, PDF encryption
 - 🛡️ **Rate Limited**: Protection against abuse (3-10 requests/minute)
 - ✅ **Validated**: Input validation for file types, sizes, and parameters
 - 📊 **Observable**: Health checks, metrics via Spring Actuator
@@ -403,14 +403,194 @@ curl -u user:password \
 
 ---
 
+### 10. Watermark
+
+Add text or image watermarks to PDF pages.
+
+**Endpoint:** `POST /pdfapi/watermark`
+**Rate Limit:** 10 requests/minute
+
+**Parameters:**
+- `file` (multipart): Source PDF file
+- `text` (string, optional): Text watermark
+- `image` (multipart, optional): Image watermark (PNG, JPG, etc.)
+- `position` (string, optional): Position on page. Default: `center`
+  - Valid positions: `top-left`, `top-center`, `top-right`, `center-left`, `center`, `center-right`, `bottom-left`, `bottom-center`, `bottom-right`
+- `opacity` (float, optional): Watermark opacity (0.0-1.0). Default: 0.3
+- `rotation` (float, optional): Rotation angle in degrees. Default: 45.0
+- `scale` (float, optional): Scale factor. Default: 1.0
+- `layer` (string, optional): Layer placement (`foreground` or `background`). Default: `foreground`
+- `startPage` (integer, optional): First page to watermark. Default: 1
+- `endPage` (integer, optional): Last page to watermark. Default: last page
+
+**Example (text watermark):**
+```bash
+curl -u user:password \
+  -F "file=@document.pdf" \
+  -F "text=CONFIDENTIAL" \
+  -F "position=center" \
+  -F "opacity=0.3" \
+  -F "rotation=45" \
+  http://localhost:8080/pdfapi/watermark \
+  --output watermarked.pdf
+```
+
+**Example (image watermark):**
+```bash
+curl -u user:password \
+  -F "file=@document.pdf" \
+  -F "image=@logo.png" \
+  -F "position=top-right" \
+  -F "opacity=0.5" \
+  -F "scale=0.5" \
+  -F "layer=background" \
+  http://localhost:8080/pdfapi/watermark \
+  --output watermarked.pdf
+```
+
+**Notes:**
+- Provide either `text` OR `image`, not both
+- Watermark is applied to all pages by default
+- Use `startPage` and `endPage` to watermark specific page ranges
+
+---
+
+### 11. Compress PDF
+
+Compress PDF files to reduce size with different compression levels.
+
+**Endpoint:** `POST /pdfapi/compress`
+**Rate Limit:** 3 requests/minute
+
+**Parameters:**
+- `file` (multipart): Source PDF file
+- `level` (string, optional): Compression level. Default: `MEDIUM`
+  - `LOW`: Basic compression
+  - `MEDIUM`: Balanced compression (recommended)
+  - `HIGH`: Maximum compression (may affect quality)
+
+**Example:**
+```bash
+curl -u user:password \
+  -F "file=@document.pdf" \
+  -F "level=HIGH" \
+  http://localhost:8080/pdfapi/compress \
+  --output compressed.pdf
+```
+
+**Notes:**
+- Compresses images and removes duplicate objects
+- `HIGH` level provides best compression but may reduce image quality
+- Actual compression depends on PDF content (images compress more than text)
+
+---
+
+### 12. Encrypt/Decrypt PDF
+
+Add password protection and permissions to PDFs or remove encryption.
+
+#### 12.1 Encrypt PDF
+
+**Endpoint:** `POST /pdfapi/encrypt`
+**Rate Limit:** 10 requests/minute
+
+**Parameters:**
+- `file` (multipart): Source PDF file
+- `userPassword` (string, optional): Password to open the PDF
+- `ownerPassword` (string, optional): Password to change permissions
+- `encryptionType` (integer, optional): Encryption strength. Default: 256 (AES-256)
+  - `40`: 40-bit encryption (weak, legacy)
+  - `128`: 128-bit encryption
+  - `256`: 256-bit AES encryption (recommended)
+- `allowPrinting` (boolean, optional): Allow printing. Default: false
+- `allowModifying` (boolean, optional): Allow editing content. Default: false
+- `allowCopy` (boolean, optional): Allow copying text/images. Default: false
+- `allowAnnotations` (boolean, optional): Allow adding annotations. Default: false
+
+**Example (password protected):**
+```bash
+curl -u user:password \
+  -F "file=@document.pdf" \
+  -F "userPassword=secret123" \
+  -F "ownerPassword=owner456" \
+  http://localhost:8080/pdfapi/encrypt \
+  --output encrypted.pdf
+```
+
+**Example (read-only with printing):**
+```bash
+curl -u user:password \
+  -F "file=@document.pdf" \
+  -F "userPassword=view123" \
+  -F "allowPrinting=true" \
+  -F "allowModifying=false" \
+  -F "allowCopy=false" \
+  http://localhost:8080/pdfapi/encrypt \
+  --output encrypted.pdf
+```
+
+#### 12.2 Decrypt PDF
+
+**Endpoint:** `POST /pdfapi/decrypt`
+**Rate Limit:** 10 requests/minute
+
+**Parameters:**
+- `file` (multipart): Encrypted PDF file
+- `password` (string): Password to decrypt (user or owner password)
+
+**Example:**
+```bash
+curl -u user:password \
+  -F "file=@encrypted.pdf" \
+  -F "password=secret123" \
+  http://localhost:8080/pdfapi/decrypt \
+  --output decrypted.pdf
+```
+
+**Notes:**
+- At least one password (user or owner) must be provided for encryption
+- User password controls file opening
+- Owner password controls permissions
+- AES-256 encryption is recommended for security
+- Decrypt requires the correct password
+
+---
+
+### 13. Optimize PDF
+
+Optimize PDF for web viewing and reduced file size.
+
+**Endpoint:** `POST /pdfapi/optimize`
+**Rate Limit:** 3 requests/minute
+
+**Parameters:**
+- `file` (multipart): Source PDF file
+
+**Example:**
+```bash
+curl -u user:password \
+  -F "file=@document.pdf" \
+  http://localhost:8080/pdfapi/optimize \
+  --output optimized.pdf
+```
+
+**Notes:**
+- Applies full compression mode
+- Removes unused objects
+- Optimizes for fast web viewing (linearization)
+- Ideal for PDFs intended for web publishing
+- Different from compress: focuses on structure optimization vs content compression
+
+---
+
 ## 🛡️ Rate Limiting
 
 To protect against abuse, the API enforces rate limits:
 
 | Endpoint | Limit |
 |----------|-------|
-| merge, split, convertImageToPDF | 3 requests/minute |
-| extract, remove, rotate, info, metadata, addPageNumbers | 10 requests/minute |
+| merge, split, convertImageToPDF, compress, optimize | 3 requests/minute |
+| extract, remove, rotate, info, metadata, addPageNumbers, watermark, encrypt, decrypt | 10 requests/minute |
 
 **When limit exceeded:**
 ```json

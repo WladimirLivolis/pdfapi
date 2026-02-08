@@ -1,5 +1,7 @@
 package com.pdf.pdfapi.controller;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pdf.pdfapi.dto.*;
 import com.pdf.pdfapi.service.PdfService;
 import com.pdf.pdfapi.validator.PdfFileValidator;
@@ -14,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/pdfapi")
@@ -22,12 +25,14 @@ public class PdfController {
 
     private final PdfService pdfService;
     private final PdfFileValidator validator;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     @PostMapping("/merge")
     @RateLimiter(name = "pdfapi-heavy")
-    public ResponseEntity<Resource> merge(@RequestParam MultipartFile... file) {
+    public ResponseEntity<Resource> merge(@RequestParam MultipartFile[] file,
+                                           @RequestParam(required = false) Boolean createBookmarks) {
         validator.validatePdfFiles(file);
-        PdfResult result = pdfService.merge(file);
+        PdfResult result = pdfService.merge(createBookmarks, file);
         return buildPdfResponse(result);
     }
 
@@ -146,6 +151,135 @@ public class PdfController {
         validator.validatePdfFile(file);
         PdfResult result = pdfService.addPageNumbers(file, position, format, startPage, endPage);
         return buildPdfResponse(result);
+    }
+
+    @PostMapping("/watermark")
+    @RateLimiter(name = "pdfapi")
+    public ResponseEntity<Resource> watermark(@RequestParam MultipartFile file,
+                                               @RequestParam(required = false) String text,
+                                               @RequestParam(required = false) MultipartFile image,
+                                               @RequestParam(required = false) String position,
+                                               @RequestParam(required = false) Float opacity,
+                                               @RequestParam(required = false) Float rotation,
+                                               @RequestParam(required = false) Float scale,
+                                               @RequestParam(required = false) String layer,
+                                               @RequestParam(required = false) Integer startPage,
+                                               @RequestParam(required = false) Integer endPage) {
+        validator.validatePdfFile(file);
+
+        // Validate that image is an image file if provided
+        if (image != null) {
+            String contentType = image.getContentType();
+            if (contentType == null || (!contentType.startsWith("image/"))) {
+                throw new IllegalArgumentException("Watermark image must be a valid image file (PNG, JPG, etc.)");
+            }
+        }
+
+        PdfResult result = pdfService.watermark(file, text, image, position, opacity, rotation, scale, layer, startPage, endPage);
+        return buildPdfResponse(result);
+    }
+
+    @PostMapping("/compress")
+    @RateLimiter(name = "pdfapi-heavy")
+    public ResponseEntity<Resource> compress(@RequestParam MultipartFile file,
+                                              @RequestParam(required = false) String level) {
+        validator.validatePdfFile(file);
+        PdfResult result = pdfService.compress(file, level);
+        return buildPdfResponse(result);
+    }
+
+    @PostMapping("/encrypt")
+    @RateLimiter(name = "pdfapi")
+    public ResponseEntity<Resource> encrypt(@RequestParam MultipartFile file,
+                                             @RequestParam(required = false) String userPassword,
+                                             @RequestParam(required = false) String ownerPassword,
+                                             @RequestParam(required = false) Integer encryptionType,
+                                             @RequestParam(required = false) Boolean allowPrinting,
+                                             @RequestParam(required = false) Boolean allowModifying,
+                                             @RequestParam(required = false) Boolean allowCopy,
+                                             @RequestParam(required = false) Boolean allowAnnotations) {
+        validator.validatePdfFile(file);
+        PdfResult result = pdfService.encrypt(file, userPassword, ownerPassword, encryptionType,
+                allowPrinting, allowModifying, allowCopy, allowAnnotations);
+        return buildPdfResponse(result);
+    }
+
+    @PostMapping("/decrypt")
+    @RateLimiter(name = "pdfapi")
+    public ResponseEntity<Resource> decrypt(@RequestParam MultipartFile file,
+                                             @RequestParam String password) {
+        validator.validatePdfFile(file);
+        PdfResult result = pdfService.decrypt(file, password);
+        return buildPdfResponse(result);
+    }
+
+    @PostMapping("/optimize")
+    @RateLimiter(name = "pdfapi-heavy")
+    public ResponseEntity<Resource> optimize(@RequestParam MultipartFile file) {
+        validator.validatePdfFile(file);
+        PdfResult result = pdfService.optimize(file);
+        return buildPdfResponse(result);
+    }
+
+    @PostMapping("/toImages")
+    @RateLimiter(name = "pdfapi-heavy")
+    public ResponseEntity<Resource> toImages(@RequestParam MultipartFile file,
+                                              @RequestParam(required = false) String format,
+                                              @RequestParam(required = false) Integer dpi,
+                                              @RequestParam(required = false) Integer quality,
+                                              @RequestParam(required = false) Integer startPage,
+                                              @RequestParam(required = false) Integer endPage) {
+        validator.validatePdfFile(file);
+        byte[] zipBytes = pdfService.toImages(file, format, dpi, quality, startPage, endPage);
+        return buildZipResponse(zipBytes, String.format("images_%s.zip", System.currentTimeMillis()));
+    }
+
+    @PostMapping("/extractImages")
+    @RateLimiter(name = "pdfapi-heavy")
+    public ResponseEntity<Resource> extractImages(@RequestParam MultipartFile file,
+                                                   @RequestParam(required = false) Integer minWidth,
+                                                   @RequestParam(required = false) Integer minHeight) {
+        validator.validatePdfFile(file);
+        byte[] zipBytes = pdfService.extractImages(file, minWidth, minHeight);
+        return buildZipResponse(zipBytes, String.format("extracted_images_%s.zip", System.currentTimeMillis()));
+    }
+
+    @PostMapping("/crop")
+    @RateLimiter(name = "pdfapi")
+    public ResponseEntity<Resource> crop(@RequestParam MultipartFile file,
+                                          @RequestParam Float x,
+                                          @RequestParam Float y,
+                                          @RequestParam Float width,
+                                          @RequestParam Float height,
+                                          @RequestParam(required = false) Integer startPage,
+                                          @RequestParam(required = false) Integer endPage) {
+        validator.validatePdfFile(file);
+        PdfResult result = pdfService.crop(file, x, y, width, height, startPage, endPage);
+        return buildPdfResponse(result);
+    }
+
+    @PostMapping("/fillForm")
+    @RateLimiter(name = "pdfapi")
+    public ResponseEntity<Resource> fillForm(@RequestParam MultipartFile file,
+                                              @RequestParam String fieldsJson,
+                                              @RequestParam(required = false) Boolean flatten) {
+        validator.validatePdfFile(file);
+        try {
+            Map<String, String> fields = objectMapper.readValue(fieldsJson, new TypeReference<>() {});
+            PdfResult result = pdfService.fillForm(file, fields, flatten);
+            return buildPdfResponse(result);
+        } catch (Exception e) {
+            throw new IllegalArgumentException("Invalid fieldsJson: must be a valid JSON object with string values");
+        }
+    }
+
+    private ResponseEntity<Resource> buildZipResponse(byte[] zipBytes, String fileName) {
+        ByteArrayResource resource = new ByteArrayResource(zipBytes);
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + fileName + "\"")
+                .contentType(MediaType.parseMediaType("application/zip"))
+                .contentLength(zipBytes.length)
+                .body(resource);
     }
 
     private ResponseEntity<Resource> buildPdfResponse(PdfResult result) {

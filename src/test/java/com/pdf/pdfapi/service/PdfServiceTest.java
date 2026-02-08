@@ -39,7 +39,7 @@ class PdfServiceTest {
     }
 
     @Test
-    void merge_given_there_is_only_one_file_expect_failure() {
+    void mergeGivenThereIsOnlyOneFileExpectFailure() {
         MultipartFile file = mock(MultipartFile.class);
         MultipartFile[] files = new MultipartFile[1];
         files[0] = file;
@@ -49,7 +49,7 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void merge_given_there_are_two_files_expect_one_combined_file() {
+    void mergeGivenThereAreTwoFilesExpectOneCombinedFile() {
         MultipartFile file1 = mock(MultipartFile.class);
         MultipartFile file2 = mock(MultipartFile.class);
 
@@ -76,7 +76,7 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void split_given_one_file_expect_multiple_files() {
+    void splitGivenOneFileExpectMultipleFiles() {
         MultipartFile originalFile = mock(MultipartFile.class);
 
         when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/split/original_file.pdf")));
@@ -107,7 +107,7 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void extract_given_one_file_expect_new_file() {
+    void extractGivenOneFileExpectNewFile() {
         MultipartFile originalFile = mock(MultipartFile.class);
 
         when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
@@ -129,7 +129,7 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void remove_given_one_file_expect_new_file() {
+    void removeGivenOneFileExpectNewFile() {
         MultipartFile originalFile = mock(MultipartFile.class);
 
         when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
@@ -151,7 +151,7 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void convertImageToPDF_given_image_expect_pdf() {
+    void convertImageToPDFGivenImageExpectPdf() {
         MultipartFile originalFile = mock(MultipartFile.class);
 
         when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/image/image.png")));
@@ -199,11 +199,9 @@ class PdfServiceTest {
         return text.toString();
     }
 
-    // ==================== Phase 3A Tests ====================
-
     @Test
     @SneakyThrows
-    void rotate_given_valid_rotation_expect_rotated_pdf() {
+    void rotateGivenValidRotationExpectRotatedPdf() {
         MultipartFile originalFile = mock(MultipartFile.class);
         when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
 
@@ -225,7 +223,7 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void rotate_given_specific_pages_expect_only_those_pages_rotated() {
+    void rotateGivenSpecificPagesExpectOnlyThosePagesRotated() {
         MultipartFile originalFile = mock(MultipartFile.class);
         when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
 
@@ -244,7 +242,7 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void rotate_given_invalid_rotation_expect_failure() {
+    void rotateGivenInvalidRotationExpectFailure() {
         MultipartFile originalFile = mock(MultipartFile.class);
 
         // Rotation must be multiple of 90
@@ -253,7 +251,7 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void rotate_given_null_rotation_expect_failure() {
+    void rotateGivenNullRotationExpectFailure() {
         MultipartFile originalFile = mock(MultipartFile.class);
 
         assertThrows(PdfErrorException.class, () -> pdfService.rotate(originalFile, null));
@@ -261,7 +259,7 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void getInfo_given_valid_pdf_expect_correct_info() {
+    void getInfoGivenValidPdfExpectCorrectInfo() {
         MultipartFile originalFile = mock(MultipartFile.class);
         byte[] pdfBytes = Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf"));
         when(originalFile.getBytes()).thenReturn(pdfBytes);
@@ -284,7 +282,7 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void getMetadata_given_valid_pdf_expect_metadata() {
+    void getMetadataGivenValidPdfExpectMetadata() {
         MultipartFile originalFile = mock(MultipartFile.class);
         when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
 
@@ -301,7 +299,7 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void updateMetadata_given_valid_metadata_expect_updated_pdf() {
+    void updateMetadataGivenValidMetadataExpectUpdatedPdf() {
         MultipartFile originalFile = mock(MultipartFile.class);
         // Use merge/file1.pdf which has simpler/no metadata
         when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/merge/file1.pdf")));
@@ -336,7 +334,7 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void updateMetadata_given_partial_metadata_expect_only_provided_fields_updated() {
+    void updateMetadataGivenPartialMetadataExpectOnlyProvidedFieldsUpdated() {
         MultipartFile originalFile = mock(MultipartFile.class);
         // Use merge/file1.pdf which has simpler/no metadata
         when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/merge/file1.pdf")));
@@ -362,7 +360,7 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void updateMetadata_given_null_metadata_expect_failure() {
+    void updateMetadataGivenNullMetadataExpectFailure() {
         MultipartFile originalFile = mock(MultipartFile.class);
 
         assertThrows(PdfErrorException.class, () -> pdfService.updateMetadata(originalFile, null));
@@ -370,7 +368,7 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void addPageNumbers_given_valid_parameters_expect_numbered_pdf() {
+    void addPageNumbersGivenValidParametersExpectNumberedPdf() {
         MultipartFile originalFile = mock(MultipartFile.class);
         when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
 
@@ -391,7 +389,7 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void addPageNumbers_given_page_range_expect_only_range_numbered() {
+    void addPageNumbersGivenPageRangeExpectOnlyRangeNumbered() {
         MultipartFile originalFile = mock(MultipartFile.class);
         when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
 
@@ -410,7 +408,7 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void addPageNumbers_given_default_parameters_expect_default_formatting() {
+    void addPageNumbersGivenDefaultParametersExpectDefaultFormatting() {
         MultipartFile originalFile = mock(MultipartFile.class);
         when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
 
@@ -424,6 +422,248 @@ class PdfServiceTest {
         assertEquals(2, result.pageCount());
 
         // Verify PDF is valid
+        try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
+            assertEquals(2, document.getNumberOfPages());
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    void watermarkGivenTextExpectWatermarkedPdf() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
+
+        PdfResult result = pdfService.watermark(originalFile, "CONFIDENTIAL", null,
+                "center", 0.3f, 45.0f, 1.0f, "foreground", null, null);
+
+        // Verify result
+        assertNotNull(result);
+        assertNotNull(result.content());
+        assertTrue(result.content().length > 0);
+        assertTrue(result.suggestedFileName().contains("watermarked"));
+        assertEquals(2, result.pageCount());
+
+        // Verify PDF is valid
+        try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
+            assertEquals(2, document.getNumberOfPages());
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    void watermarkGivenImageExpectWatermarkedPdf() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+        MultipartFile imageFile = mock(MultipartFile.class);
+
+        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
+        when(imageFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/image/image.png")));
+
+        PdfResult result = pdfService.watermark(originalFile, null, imageFile,
+                "top-right", 0.5f, 0.0f, 0.5f, "background", null, null);
+
+        // Verify result
+        assertNotNull(result);
+        assertNotNull(result.content());
+        assertTrue(result.content().length > 0);
+        assertTrue(result.suggestedFileName().contains("watermarked"));
+        assertEquals(2, result.pageCount());
+
+        // Verify PDF is valid
+        try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
+            assertEquals(2, document.getNumberOfPages());
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    void watermarkGivenNoTextAndNoImageExpectFailure() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+
+        assertThrows(PdfErrorException.class,
+                () -> pdfService.watermark(originalFile, null, null, "center", 0.3f, 45.0f, 1.0f, "foreground", null, null));
+    }
+
+    @Test
+    @SneakyThrows
+    void watermarkGivenBothTextAndImageExpectFailure() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+        MultipartFile imageFile = mock(MultipartFile.class);
+
+        assertThrows(PdfErrorException.class,
+                () -> pdfService.watermark(originalFile, "TEST", imageFile, "center", 0.3f, 45.0f, 1.0f, "foreground", null, null));
+    }
+
+    @Test
+    @SneakyThrows
+    void compressGivenLowLevelExpectCompressedPdf() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+        byte[] pdfBytes = Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf"));
+        when(originalFile.getBytes()).thenReturn(pdfBytes);
+        when(originalFile.getSize()).thenReturn((long) pdfBytes.length);
+
+        PdfResult result = pdfService.compress(originalFile, "LOW");
+
+        // Verify result
+        assertNotNull(result);
+        assertNotNull(result.content());
+        assertTrue(result.content().length > 0);
+        assertTrue(result.suggestedFileName().contains("compressed_low"));
+        assertEquals(2, result.pageCount());
+
+        // Verify PDF is valid
+        try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
+            assertEquals(2, document.getNumberOfPages());
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    void compressGivenMediumLevelExpectCompressedPdf() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+        byte[] pdfBytes = Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf"));
+        when(originalFile.getBytes()).thenReturn(pdfBytes);
+        when(originalFile.getSize()).thenReturn((long) pdfBytes.length);
+
+        PdfResult result = pdfService.compress(originalFile, "MEDIUM");
+
+        // Verify result
+        assertNotNull(result);
+        assertNotNull(result.content());
+        assertTrue(result.content().length > 0);
+        assertTrue(result.suggestedFileName().contains("compressed_medium"));
+        assertEquals(2, result.pageCount());
+    }
+
+    @Test
+    @SneakyThrows
+    void compressGivenHighLevelExpectCompressedPdf() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+        byte[] pdfBytes = Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf"));
+        when(originalFile.getBytes()).thenReturn(pdfBytes);
+        when(originalFile.getSize()).thenReturn((long) pdfBytes.length);
+
+        PdfResult result = pdfService.compress(originalFile, "HIGH");
+
+        // Verify result
+        assertNotNull(result);
+        assertNotNull(result.content());
+        assertTrue(result.content().length > 0);
+        assertTrue(result.suggestedFileName().contains("compressed_high"));
+        assertEquals(2, result.pageCount());
+    }
+
+    @Test
+    @SneakyThrows
+    void compressGivenInvalidLevelExpectFailure() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+
+        assertThrows(PdfErrorException.class, () -> pdfService.compress(originalFile, "INVALID"));
+    }
+
+    @Test
+    @SneakyThrows
+    void encryptGivenUserPasswordExpectEncryptedPdf() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
+
+        PdfResult result = pdfService.encrypt(originalFile, "user123", null,
+                null, true, false, false, false);
+
+        // Verify result
+        assertNotNull(result);
+        assertNotNull(result.content());
+        assertTrue(result.content().length > 0);
+        assertTrue(result.suggestedFileName().contains("encrypted"));
+        assertEquals(2, result.pageCount());
+
+        // Verify PDF is encrypted (should fail without password)
+        assertThrows(Exception.class, () -> {
+            new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())));
+        });
+    }
+
+    @Test
+    @SneakyThrows
+    void encryptGivenOwnerPasswordExpectEncryptedPdf() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
+
+        // Use null for encryptionType to test default (AES-256)
+        PdfResult result = pdfService.encrypt(originalFile, null, "owner456",
+                null, false, false, false, false);
+
+        // Verify result
+        assertNotNull(result);
+        assertNotNull(result.content());
+        assertTrue(result.content().length > 0);
+        assertTrue(result.suggestedFileName().contains("encrypted"));
+        assertEquals(2, result.pageCount());
+    }
+
+    @Test
+    @SneakyThrows
+    void encryptGivenNoPasswordExpectFailure() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+
+        assertThrows(PdfErrorException.class,
+                () -> pdfService.encrypt(originalFile, null, null, null, null, null, null, null));
+    }
+
+    @Test
+    @SneakyThrows
+    void decryptGivenCorrectPasswordExpectDecryptedPdf() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
+
+        // First encrypt with both user and owner password
+        PdfResult encrypted = pdfService.encrypt(originalFile, "password123", "owner456",
+                null, true, true, true, true);
+
+        // Then decrypt using owner password
+        MultipartFile encryptedFile = mock(MultipartFile.class);
+        when(encryptedFile.getBytes()).thenReturn(encrypted.content());
+
+        PdfResult result = pdfService.decrypt(encryptedFile, "owner456");
+
+        // Verify result
+        assertNotNull(result);
+        assertNotNull(result.content());
+        assertTrue(result.content().length > 0);
+        assertTrue(result.suggestedFileName().contains("decrypted"));
+        assertEquals(2, result.pageCount());
+
+        // Verify PDF can be opened without password
+        try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
+            assertEquals(2, document.getNumberOfPages());
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    void decryptGivenNoPasswordExpectFailure() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+
+        assertThrows(PdfErrorException.class, () -> pdfService.decrypt(originalFile, null));
+    }
+
+    @Test
+    @SneakyThrows
+    void optimizeGivenValidPdfExpectOptimizedPdf() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+        byte[] pdfBytes = Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf"));
+        when(originalFile.getBytes()).thenReturn(pdfBytes);
+        when(originalFile.getSize()).thenReturn((long) pdfBytes.length);
+
+        PdfResult result = pdfService.optimize(originalFile);
+
+        // Verify result
+        assertNotNull(result);
+        assertNotNull(result.content());
+        assertTrue(result.content().length > 0);
+        assertTrue(result.suggestedFileName().contains("optimized"));
+        assertEquals(2, result.pageCount());
+
+        // Verify PDF is valid and optimized
         try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
             assertEquals(2, document.getNumberOfPages());
         }
