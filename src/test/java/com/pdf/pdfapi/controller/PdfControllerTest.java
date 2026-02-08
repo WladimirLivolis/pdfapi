@@ -269,13 +269,16 @@ class PdfControllerTest {
                 .pageCount(10)
                 .build();
 
-        when(pdfService.watermark(file, text, null, position, opacity, rotation, scale, layer, startPage, endPage))
-                .thenReturn(mockResult);
+        WatermarkRequest request = WatermarkRequest.builder()
+                .text(text).position(position).opacity(opacity).rotation(rotation)
+                .scale(scale).layer(layer).startPage(startPage).endPage(endPage)
+                .build();
+        when(pdfService.watermark(file, null, request)).thenReturn(mockResult);
 
         pdfController.watermark(file, text, null, position, opacity, rotation, scale, layer, startPage, endPage);
 
         verify(validator, times(1)).validatePdfFile(file);
-        verify(pdfService, times(1)).watermark(file, text, null, position, opacity, rotation, scale, layer, startPage, endPage);
+        verify(pdfService, times(1)).watermark(file, null, request);
     }
 
     @Test
@@ -297,13 +300,16 @@ class PdfControllerTest {
                 .pageCount(10)
                 .build();
 
-        when(pdfService.watermark(file, null, image, position, opacity, rotation, scale, layer, null, null))
-                .thenReturn(mockResult);
+        WatermarkRequest request = WatermarkRequest.builder()
+                .position(position).opacity(opacity).rotation(rotation)
+                .scale(scale).layer(layer)
+                .build();
+        when(pdfService.watermark(file, image, request)).thenReturn(mockResult);
 
         pdfController.watermark(file, null, image, position, opacity, rotation, scale, layer, null, null);
 
         verify(validator, times(1)).validatePdfFile(file);
-        verify(pdfService, times(1)).watermark(file, null, image, position, opacity, rotation, scale, layer, null, null);
+        verify(pdfService, times(1)).watermark(file, image, request);
     }
 
     @Test
@@ -344,16 +350,15 @@ class PdfControllerTest {
                 .pageCount(10)
                 .build();
 
-        when(pdfService.encrypt(file, userPassword, ownerPassword, encryptionType,
-                allowPrinting, allowModifying, allowCopy, allowAnnotations))
-                .thenReturn(mockResult);
+        EncryptRequest request = new EncryptRequest(userPassword, ownerPassword, encryptionType,
+                allowPrinting, allowModifying, allowCopy, allowAnnotations);
+        when(pdfService.encrypt(file, request)).thenReturn(mockResult);
 
         pdfController.encrypt(file, userPassword, ownerPassword, encryptionType,
                 allowPrinting, allowModifying, allowCopy, allowAnnotations);
 
         verify(validator, times(1)).validatePdfFile(file);
-        verify(pdfService, times(1)).encrypt(file, userPassword, ownerPassword, encryptionType,
-                allowPrinting, allowModifying, allowCopy, allowAnnotations);
+        verify(pdfService, times(1)).encrypt(file, request);
     }
 
     @Test
@@ -400,12 +405,12 @@ class PdfControllerTest {
         MultipartFile file = mock(MultipartFile.class);
         byte[] mockZip = new byte[]{1, 2, 3};
 
-        when(pdfService.toImages(file, "png", 150, null, null, null)).thenReturn(mockZip);
+        when(pdfService.toImages(file, "png", 150, null, null)).thenReturn(mockZip);
 
-        pdfController.toImages(file, "png", 150, null, null, null);
+        pdfController.toImages(file, "png", 150, null, null);
 
         verify(validator, times(1)).validatePdfFile(file);
-        verify(pdfService, times(1)).toImages(file, "png", 150, null, null, null);
+        verify(pdfService, times(1)).toImages(file, "png", 150, null, null);
     }
 
     @Test

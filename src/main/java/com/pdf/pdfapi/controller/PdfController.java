@@ -15,6 +15,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -167,7 +168,6 @@ public class PdfController {
                                                @RequestParam(required = false) Integer endPage) {
         validator.validatePdfFile(file);
 
-        // Validate that image is an image file if provided
         if (image != null) {
             String contentType = image.getContentType();
             if (contentType == null || (!contentType.startsWith("image/"))) {
@@ -175,7 +175,11 @@ public class PdfController {
             }
         }
 
-        PdfResult result = pdfService.watermark(file, text, image, position, opacity, rotation, scale, layer, startPage, endPage);
+        WatermarkRequest request = WatermarkRequest.builder()
+                .text(text).position(position).opacity(opacity).rotation(rotation)
+                .scale(scale).layer(layer).startPage(startPage).endPage(endPage)
+                .build();
+        PdfResult result = pdfService.watermark(file, image, request);
         return buildPdfResponse(result);
     }
 
@@ -199,8 +203,9 @@ public class PdfController {
                                              @RequestParam(required = false) Boolean allowCopy,
                                              @RequestParam(required = false) Boolean allowAnnotations) {
         validator.validatePdfFile(file);
-        PdfResult result = pdfService.encrypt(file, userPassword, ownerPassword, encryptionType,
+        EncryptRequest request = new EncryptRequest(userPassword, ownerPassword, encryptionType,
                 allowPrinting, allowModifying, allowCopy, allowAnnotations);
+        PdfResult result = pdfService.encrypt(file, request);
         return buildPdfResponse(result);
     }
 
@@ -226,11 +231,10 @@ public class PdfController {
     public ResponseEntity<Resource> toImages(@RequestParam MultipartFile file,
                                               @RequestParam(required = false) String format,
                                               @RequestParam(required = false) Integer dpi,
-                                              @RequestParam(required = false) Integer quality,
                                               @RequestParam(required = false) Integer startPage,
                                               @RequestParam(required = false) Integer endPage) {
         validator.validatePdfFile(file);
-        byte[] zipBytes = pdfService.toImages(file, format, dpi, quality, startPage, endPage);
+        byte[] zipBytes = pdfService.toImages(file, format, dpi, startPage, endPage);
         return buildZipResponse(zipBytes, String.format("images_%s.zip", System.currentTimeMillis()));
     }
 
@@ -265,7 +269,8 @@ public class PdfController {
                                               @RequestParam(required = false) Boolean flatten) {
         validator.validatePdfFile(file);
         try {
-            Map<String, String> fields = objectMapper.readValue(fieldsJson, new TypeReference<>() {});
+            byte[] jsonBytes = fieldsJson.getBytes(StandardCharsets.UTF_8);
+            Map<String, String> fields = objectMapper.readValue(jsonBytes, new TypeReference<>() {});
             PdfResult result = pdfService.fillForm(file, fields, flatten);
             return buildPdfResponse(result);
         } catch (Exception e) {

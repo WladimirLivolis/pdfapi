@@ -9,10 +9,6 @@ spring:
       max-file-size: 100MB
       max-request-size: 100MB
 
-# PDF API Configuration
-pdfapi:
-  output_folder: ${PDF_OUTPUT_FOLDER:./output/}
-
 # Security Configuration
 security:
   users:

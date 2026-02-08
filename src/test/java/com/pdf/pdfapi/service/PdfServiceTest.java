@@ -3,7 +3,6 @@ package com.pdf.pdfapi.service;
 import com.itextpdf.kernel.pdf.PdfDocument;
 import com.itextpdf.kernel.pdf.PdfReader;
 import com.itextpdf.kernel.pdf.canvas.parser.PdfTextExtractor;
-import com.pdf.pdfapi.config.PdfConfig;
 import com.pdf.pdfapi.dto.*;
 import com.pdf.pdfapi.exception.PdfErrorException;
 import lombok.SneakyThrows;
@@ -26,17 +25,8 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 class PdfServiceTest {
 
-    @Mock
-    private PdfConfig pdfConfig;
-
     @InjectMocks
     private PdfService pdfService;
-
-    @BeforeEach
-    void init() {
-        // No longer need to delete temporary files since we don't save to disk
-        lenient().when(pdfConfig.getOutputFolder()).thenReturn("./output/");
-    }
 
     @Test
     void mergeGivenThereIsOnlyOneFileExpectFailure() {
@@ -433,8 +423,9 @@ class PdfServiceTest {
         MultipartFile originalFile = mock(MultipartFile.class);
         when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
 
-        PdfResult result = pdfService.watermark(originalFile, "CONFIDENTIAL", null,
-                "center", 0.3f, 45.0f, 1.0f, "foreground", null, null);
+        PdfResult result = pdfService.watermark(originalFile, null, WatermarkRequest.builder()
+                .text("CONFIDENTIAL").position("center").opacity(0.3f).rotation(45.0f).scale(1.0f).layer("foreground")
+                .build());
 
         // Verify result
         assertNotNull(result);
@@ -458,8 +449,9 @@ class PdfServiceTest {
         when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
         when(imageFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/image/image.png")));
 
-        PdfResult result = pdfService.watermark(originalFile, null, imageFile,
-                "top-right", 0.5f, 0.0f, 0.5f, "background", null, null);
+        PdfResult result = pdfService.watermark(originalFile, imageFile, WatermarkRequest.builder()
+                .position("top-right").opacity(0.5f).rotation(0.0f).scale(0.5f).layer("background")
+                .build());
 
         // Verify result
         assertNotNull(result);
@@ -480,7 +472,8 @@ class PdfServiceTest {
         MultipartFile originalFile = mock(MultipartFile.class);
 
         assertThrows(PdfErrorException.class,
-                () -> pdfService.watermark(originalFile, null, null, "center", 0.3f, 45.0f, 1.0f, "foreground", null, null));
+                () -> pdfService.watermark(originalFile, null, WatermarkRequest.builder()
+                        .position("center").opacity(0.3f).rotation(45.0f).scale(1.0f).layer("foreground").build()));
     }
 
     @Test
@@ -490,7 +483,8 @@ class PdfServiceTest {
         MultipartFile imageFile = mock(MultipartFile.class);
 
         assertThrows(PdfErrorException.class,
-                () -> pdfService.watermark(originalFile, "TEST", imageFile, "center", 0.3f, 45.0f, 1.0f, "foreground", null, null));
+                () -> pdfService.watermark(originalFile, imageFile, WatermarkRequest.builder()
+                        .text("TEST").position("center").opacity(0.3f).rotation(45.0f).scale(1.0f).layer("foreground").build()));
     }
 
     @Test
@@ -566,8 +560,8 @@ class PdfServiceTest {
         MultipartFile originalFile = mock(MultipartFile.class);
         when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
 
-        PdfResult result = pdfService.encrypt(originalFile, "user123", null,
-                null, true, false, false, false);
+        PdfResult result = pdfService.encrypt(originalFile,
+                new EncryptRequest("user123", null, null, true, false, false, false));
 
         // Verify result
         assertNotNull(result);
@@ -588,9 +582,8 @@ class PdfServiceTest {
         MultipartFile originalFile = mock(MultipartFile.class);
         when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
 
-        // Use null for encryptionType to test default (AES-256)
-        PdfResult result = pdfService.encrypt(originalFile, null, "owner456",
-                null, false, false, false, false);
+        PdfResult result = pdfService.encrypt(originalFile,
+                new EncryptRequest(null, "owner456", null, false, false, false, false));
 
         // Verify result
         assertNotNull(result);
@@ -606,7 +599,7 @@ class PdfServiceTest {
         MultipartFile originalFile = mock(MultipartFile.class);
 
         assertThrows(PdfErrorException.class,
-                () -> pdfService.encrypt(originalFile, null, null, null, null, null, null, null));
+                () -> pdfService.encrypt(originalFile, new EncryptRequest(null, null, null, null, null, null, null)));
     }
 
     @Test
@@ -615,9 +608,8 @@ class PdfServiceTest {
         MultipartFile originalFile = mock(MultipartFile.class);
         when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
 
-        // First encrypt with both user and owner password
-        PdfResult encrypted = pdfService.encrypt(originalFile, "password123", "owner456",
-                null, true, true, true, true);
+        PdfResult encrypted = pdfService.encrypt(originalFile,
+                new EncryptRequest("password123", "owner456", null, true, true, true, true));
 
         // Then decrypt using owner password
         MultipartFile encryptedFile = mock(MultipartFile.class);

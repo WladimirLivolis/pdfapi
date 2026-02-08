@@ -20,11 +20,12 @@ import com.itextpdf.layout.element.Paragraph;
 import com.itextpdf.layout.properties.TextAlignment;
 import com.itextpdf.forms.PdfAcroForm;
 import com.itextpdf.forms.fields.PdfFormField;
-import com.pdf.pdfapi.config.PdfConfig;
+import com.pdf.pdfapi.dto.EncryptRequest;
 import com.pdf.pdfapi.dto.PdfInfoResponse;
 import com.pdf.pdfapi.dto.PdfMetadataRequest;
 import com.pdf.pdfapi.dto.PdfMetadataResponse;
 import com.pdf.pdfapi.dto.PdfResult;
+import com.pdf.pdfapi.dto.WatermarkRequest;
 import com.pdf.pdfapi.exception.PdfErrorException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
@@ -58,8 +59,6 @@ public class PdfService {
     private static final String LOW_COMPRESSION_LEVEL = "LOW";
     private static final String MEDIUM_COMPRESSION_LEVEL = "MEDIUM";
     private static final String HIGH_COMPRESSION_LEVEL = "HIGH";
-
-    private final PdfConfig pdfConfig;
 
     public PdfResult merge(MultipartFile... file) {
         return merge(false, file);
@@ -788,13 +787,13 @@ public class PdfService {
 
     private void applyHighCompression(PdfDocument pdfDocument, int totalPages) {
         for (int i = 1; i <= totalPages; i++) {
-            compressPageResources(pdfDocument.getPage(i), 0.5f);
+            compressPageResources(pdfDocument.getPage(i));
         }
     }
 
     private void applyMediumCompression(PdfDocument pdfDocument, int totalPages) {
         for (int i = 1; i <= totalPages; i++) {
-            compressPageResources(pdfDocument.getPage(i), 0.75f);
+            compressPageResources(pdfDocument.getPage(i));
         }
     }
 
@@ -804,43 +803,33 @@ public class PdfService {
                 level, originalSize, compressedSize, String.format("%.2f", reductionPercentage), pageCount);
     }
 
-    private void compressPageResources(PdfPage page, float quality) {
+    private void compressPageResources(PdfPage page) {
         try {
-            PdfDictionary pageDict = page.getPdfObject();
-            PdfDictionary resources = pageDict.getAsDictionary(PdfName.Resources);
-
-            if (resources != null) {
-                PdfDictionary xObject = resources.getAsDictionary(PdfName.XObject);
-                if (xObject != null) {
-                    for (PdfName imgName : xObject.keySet()) {
-                        PdfStream stream = xObject.getAsStream(imgName);
-                        if (stream != null) {
-                            PdfObject subtype = stream.get(PdfName.Subtype);
-                            if (PdfName.Image.equals(subtype)) {
-                                // Apply compression to image
-                                compressImageStream(stream, quality);
-                            }
-                        }
-                    }
-                }
+            PdfDictionary resources = page.getPdfObject().getAsDictionary(PdfName.Resources);
+            if (resources == null) return;
+            PdfDictionary xObject = resources.getAsDictionary(PdfName.XObject);
+            if (xObject != null) {
+                compressXObjectImages(xObject);
             }
         } catch (Exception e) {
-            // Log but don't fail - continue with other pages
             log.warn("Failed to compress resources on page, continuing: {}", e.getMessage());
         }
     }
 
-    private void compressImageStream(PdfStream imageStream, float quality) {
+    private void compressXObjectImages(PdfDictionary xObject) {
+        for (PdfName imgName : xObject.keySet()) {
+            PdfStream stream = xObject.getAsStream(imgName);
+            if (stream != null && PdfName.Image.equals(stream.get(PdfName.Subtype))) {
+                compressImageStream(stream);
+            }
+        }
+    }
+
+    private void compressImageStream(PdfStream imageStream) {
         try {
-            // Set JPEG compression if not already compressed
             PdfObject filter = imageStream.get(PdfName.Filter);
-
-            // Only re-compress if it's not already using DCTDecode (JPEG)
             if (!PdfName.DCTDecode.equals(filter)) {
-                // Apply Flate compression
                 imageStream.put(PdfName.Filter, PdfName.FlateDecode);
-
-                // Mark stream as modified
                 imageStream.setModified();
             }
         } catch (Exception e) {
@@ -848,15 +837,10 @@ public class PdfService {
         }
     }
 
-    public PdfResult encrypt(MultipartFile file, String userPassword, String ownerPassword,
-                             Integer encryptionType, Boolean allowPrinting, Boolean allowModifying,
-                             Boolean allowCopy, Boolean allowAnnotations) {
-        validatePasswordsProvided(userPassword, ownerPassword);
+    public PdfResult encrypt(MultipartFile file, EncryptRequest request) {
+        validatePasswordsProvided(request.userPassword(), request.ownerPassword());
 
-        EncryptionConfig config = buildEncryptionConfig(
-                userPassword, ownerPassword, encryptionType,
-                allowPrinting, allowModifying, allowCopy, allowAnnotations
-        );
+        EncryptionConfig config = buildEncryptionConfig(request);
 
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -899,17 +883,14 @@ public class PdfService {
         }
     }
 
-    private EncryptionConfig buildEncryptionConfig(String userPassword, String ownerPassword,
-                                                    Integer encryptionType, Boolean allowPrinting,
-                                                    Boolean allowModifying, Boolean allowCopy,
-                                                    Boolean allowAnnotations) {
-        String userPwd = (userPassword != null && !userPassword.isBlank()) ? userPassword : "";
-        String ownerPwd = (ownerPassword != null && !ownerPassword.isBlank()) ? ownerPassword : "";
-        int encType = (encryptionType != null) ? encryptionType : EncryptionConstants.ENCRYPTION_AES_256;
+    private EncryptionConfig buildEncryptionConfig(EncryptRequest request) {
+        String userPwd = (request.userPassword() != null && !request.userPassword().isBlank()) ? request.userPassword() : "";
+        String ownerPwd = (request.ownerPassword() != null && !request.ownerPassword().isBlank()) ? request.ownerPassword() : "";
+        int encType = (request.encryptionType() != null) ? request.encryptionType() : EncryptionConstants.ENCRYPTION_AES_256;
 
         validateEncryptionType(encType);
 
-        int permissions = calculatePermissions(allowPrinting, allowModifying, allowCopy, allowAnnotations);
+        int permissions = calculatePermissions(request.allowPrinting(), request.allowModifying(), request.allowCopy(), request.allowAnnotations());
 
         return new EncryptionConfig(userPwd, ownerPwd, encType, permissions);
     }
@@ -1059,12 +1040,11 @@ public class PdfService {
         }
     }
 
-    public PdfResult watermark(MultipartFile file, String text, MultipartFile imageFile,
-                               String position, Float opacity, Float rotation, Float scale,
-                               String layer, Integer startPage, Integer endPage) {
-        validateWatermarkInput(text, imageFile);
+    public PdfResult watermark(MultipartFile file, MultipartFile imageFile, WatermarkRequest request) {
+        validateWatermarkInput(request.text(), imageFile);
 
-        WatermarkConfig config = buildWatermarkConfig(position, opacity, rotation, scale, layer);
+        WatermarkConfig config = new WatermarkConfig(
+                request.position(), request.opacity(), request.rotation(), request.scale(), request.layer());
 
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -1073,9 +1053,9 @@ public class PdfService {
                     new PdfWriter(outputStream)
             );
 
-            WatermarkPageRange pageRange = calculatePageRange(pdfDocument, startPage, endPage);
+            WatermarkPageRange pageRange = calculatePageRange(pdfDocument, request.startPage(), request.endPage());
 
-            applyWatermark(pdfDocument, text, imageFile, config, pageRange);
+            applyWatermark(pdfDocument, request.text(), imageFile, config, pageRange);
 
             int pageCount = pdfDocument.getNumberOfPages();
             pdfDocument.close();
@@ -1110,17 +1090,6 @@ public class PdfService {
         }
     }
 
-    private WatermarkConfig buildWatermarkConfig(String position, Float opacity, Float rotation,
-                                                  Float scale, String layer) {
-        String pos = (position != null && !position.isBlank()) ? position : "center";
-        float opacityValue = (opacity != null && opacity >= 0 && opacity <= 1) ? opacity : 0.3f;
-        float rotationValue = (rotation != null) ? rotation : 45.0f;
-        float scaleValue = (scale != null && scale > 0) ? scale : 1.0f;
-        String layerValue = (layer != null && !layer.isBlank()) ? layer.toLowerCase() : "foreground";
-
-        return new WatermarkConfig(pos, opacityValue, rotationValue, scaleValue, layerValue);
-    }
-
     private WatermarkPageRange calculatePageRange(PdfDocument pdfDocument, Integer startPage, Integer endPage) {
         int totalPages = pdfDocument.getNumberOfPages();
         int start = (startPage != null && startPage >= 1) ? startPage : 1;
@@ -1134,14 +1103,19 @@ public class PdfService {
     }
 
     private void applyWatermark(PdfDocument pdfDocument, String text, MultipartFile imageFile,
-                                WatermarkConfig config, WatermarkPageRange pageRange) throws Exception {
+                                WatermarkConfig config, WatermarkPageRange pageRange) throws IOException {
         if (text != null) {
-            applyTextWatermark(pdfDocument, text, config.position(), config.opacity(),
-                    config.rotation(), config.scale(), config.layer(), pageRange.start(), pageRange.end());
+            applyTextWatermark(pdfDocument, text, config, pageRange);
         } else {
-            applyImageWatermark(pdfDocument, imageFile, config.position(), config.opacity(),
-                    config.rotation(), config.scale(), config.layer(), pageRange.start(), pageRange.end());
+            applyImageWatermark(pdfDocument, imageFile, config, pageRange);
         }
+    }
+
+    private PdfCanvas createLayeredCanvas(PdfPage page, String layer) {
+        if ("background".equals(layer)) {
+            return new PdfCanvas(page.newContentStreamBefore(), page.getResources(), page.getDocument());
+        }
+        return new PdfCanvas(page);
     }
 
     /**
@@ -1157,75 +1131,54 @@ public class PdfService {
     private record WatermarkPageRange(int start, int end) {
     }
 
-    private void applyTextWatermark(PdfDocument pdfDocument, String text, String position,
-                                    float opacity, float rotation, float scale, String layer,
-                                    int startPage, int endPage) throws Exception {
+    private void applyTextWatermark(PdfDocument pdfDocument, String text,
+                                    WatermarkConfig config, WatermarkPageRange pageRange) throws IOException {
         PdfFont font = PdfFontFactory.createFont();
 
-        for (int i = startPage; i <= endPage; i++) {
+        for (int i = pageRange.start(); i <= pageRange.end(); i++) {
             PdfPage page = pdfDocument.getPage(i);
             Rectangle pageSize = page.getPageSize();
-
-            WatermarkPosition watermarkPos = calculateWatermarkPosition(pageSize, position);
-
-            PdfCanvas pdfCanvas;
-            if ("background".equals(layer)) {
-                pdfCanvas = new PdfCanvas(page.newContentStreamBefore(), page.getResources(), page.getDocument());
-            } else {
-                pdfCanvas = new PdfCanvas(page);
-            }
+            WatermarkPosition watermarkPos = calculateWatermarkPosition(pageSize, config.position());
+            PdfCanvas pdfCanvas = createLayeredCanvas(page, config.layer());
 
             pdfCanvas.saveState();
             pdfCanvas.setFillColor(ColorConstants.LIGHT_GRAY);
-            pdfCanvas.setExtGState(createExtGraphicsState(opacity));
-
-            // Move to position and rotate
+            pdfCanvas.setExtGState(createExtGraphicsState(config.opacity()));
             pdfCanvas.concatMatrix(1, 0, 0, 1, watermarkPos.x(), watermarkPos.y());
             pdfCanvas.concatMatrix(
-                    Math.cos(Math.toRadians(rotation)), Math.sin(Math.toRadians(rotation)),
-                    -Math.sin(Math.toRadians(rotation)), Math.cos(Math.toRadians(rotation)),
+                    Math.cos(Math.toRadians(config.rotation())), Math.sin(Math.toRadians(config.rotation())),
+                    -Math.sin(Math.toRadians(config.rotation())), Math.cos(Math.toRadians(config.rotation())),
                     0, 0
             );
-
             pdfCanvas.beginText();
-            pdfCanvas.setFontAndSize(font, 60 * scale);
+            pdfCanvas.setFontAndSize(font, 60 * config.scale());
             pdfCanvas.showText(text);
             pdfCanvas.endText();
             pdfCanvas.restoreState();
         }
     }
 
-    private void applyImageWatermark(PdfDocument pdfDocument, MultipartFile imageFile, String position,
-                                     float opacity, float rotation, float scale, String layer,
-                                     int startPage, int endPage) throws Exception {
+    private void applyImageWatermark(PdfDocument pdfDocument, MultipartFile imageFile,
+                                     WatermarkConfig config, WatermarkPageRange pageRange) throws IOException {
         ImageData imageData = ImageDataFactory.create(imageFile.getBytes());
         Image image = new Image(imageData);
 
-        for (int i = startPage; i <= endPage; i++) {
+        for (int i = pageRange.start(); i <= pageRange.end(); i++) {
             PdfPage page = pdfDocument.getPage(i);
             Rectangle pageSize = page.getPageSize();
-
-            WatermarkPosition watermarkPos = calculateWatermarkPosition(pageSize, position);
-
-            PdfCanvas pdfCanvas;
-            if ("background".equals(layer)) {
-                pdfCanvas = new PdfCanvas(page.newContentStreamBefore(), page.getResources(), page.getDocument());
-            } else {
-                pdfCanvas = new PdfCanvas(page);
-            }
+            WatermarkPosition watermarkPos = calculateWatermarkPosition(pageSize, config.position());
+            PdfCanvas pdfCanvas = createLayeredCanvas(page, config.layer());
 
             pdfCanvas.saveState();
-            pdfCanvas.setExtGState(createExtGraphicsState(opacity));
+            pdfCanvas.setExtGState(createExtGraphicsState(config.opacity()));
 
-            // Calculate image dimensions with scale
-            float imgWidth = image.getImageWidth() * scale;
-            float imgHeight = image.getImageHeight() * scale;
+            float imgWidth = image.getImageWidth() * config.scale();
+            float imgHeight = image.getImageHeight() * config.scale();
 
-            // Apply transformations: translate, rotate, scale
             pdfCanvas.concatMatrix(1, 0, 0, 1, watermarkPos.x(), watermarkPos.y());
             pdfCanvas.concatMatrix(
-                    Math.cos(Math.toRadians(rotation)), Math.sin(Math.toRadians(rotation)),
-                    -Math.sin(Math.toRadians(rotation)), Math.cos(Math.toRadians(rotation)),
+                    Math.cos(Math.toRadians(config.rotation())), Math.sin(Math.toRadians(config.rotation())),
+                    -Math.sin(Math.toRadians(config.rotation())), Math.cos(Math.toRadians(config.rotation())),
                     0, 0
             );
 
@@ -1298,7 +1251,7 @@ public class PdfService {
     private record WatermarkPosition(float x, float y) {
     }
 
-    public byte[] toImages(MultipartFile file, String format, Integer dpi, Integer quality,
+    public byte[] toImages(MultipartFile file, String format, Integer dpi,
                             Integer startPage, Integer endPage) {
         String fmt = (format != null && format.equalsIgnoreCase("jpg")) ? "jpg" : "png";
         int resolvedDpi = (dpi != null && dpi > 0) ? dpi : 150;
@@ -1309,8 +1262,8 @@ public class PdfService {
             PDFRenderer renderer = new PDFRenderer(document);
 
             int totalPages = document.getNumberOfPages();
-            int start = (startPage != null && startPage >= 1) ? startPage - 1 : 0;
-            int end = (endPage != null && endPage <= totalPages) ? endPage - 1 : totalPages - 1;
+            int start = getValidStartPage(startPage) - 1;
+            int end = getValidEndPage(endPage, totalPages) - 1;
 
             if (start > end) {
                 document.close();
@@ -1319,18 +1272,12 @@ public class PdfService {
 
             ByteArrayOutputStream zipOut = new ByteArrayOutputStream();
             try (ZipOutputStream zos = new ZipOutputStream(zipOut)) {
+                String imageFormat = "jpg".equals(fmt) ? "jpeg" : "png";
                 for (int i = start; i <= end; i++) {
-                    ImageType imageType = ImageType.RGB;
-                    BufferedImage image = renderer.renderImageWithDPI(i, resolvedDpi, imageType);
-
+                    BufferedImage image = renderer.renderImageWithDPI(i, resolvedDpi, ImageType.RGB);
                     ByteArrayOutputStream imgOut = new ByteArrayOutputStream();
-                    String imageFormat = "jpg".equals(fmt) ? "jpeg" : "png";
                     ImageIO.write(image, imageFormat, imgOut);
-
-                    String entryName = String.format("page_%d.%s", i + 1, fmt);
-                    zos.putNextEntry(new ZipEntry(entryName));
-                    zos.write(imgOut.toByteArray());
-                    zos.closeEntry();
+                    addToZip(zos, String.format("page_%d.%s", i + 1, fmt), imgOut.toByteArray());
                 }
             }
 
@@ -1356,31 +1303,7 @@ public class PdfService {
                 int pageNum = 0;
                 for (PDPage page : document.getPages()) {
                     pageNum++;
-                    PDResources resources = page.getResources();
-                    int imageIndex = 0;
-                    for (var xObjectName : resources.getXObjectNames()) {
-                        PDXObject xObject = resources.getXObject(xObjectName);
-                        if (xObject instanceof PDImageXObject imageXObject) {
-                            int width = imageXObject.getWidth();
-                            int height = imageXObject.getHeight();
-
-                            if (minWidth != null && width < minWidth) continue;
-                            if (minHeight != null && height < minHeight) continue;
-
-                            BufferedImage image = imageXObject.getImage();
-                            String suffix = imageXObject.getSuffix() != null ? imageXObject.getSuffix() : "png";
-                            String entryName = String.format("image_page%d_%d.%s", pageNum, imageIndex, suffix);
-
-                            ByteArrayOutputStream imgOut = new ByteArrayOutputStream();
-                            String formatName = suffix.equalsIgnoreCase("jpg") ? "jpeg" : suffix;
-                            ImageIO.write(image, formatName, imgOut);
-
-                            zos.putNextEntry(new ZipEntry(entryName));
-                            zos.write(imgOut.toByteArray());
-                            zos.closeEntry();
-                            imageIndex++;
-                        }
-                    }
+                    extractImagesFromPage(page, pageNum, minWidth, minHeight, zos);
                 }
             }
 
@@ -1394,6 +1317,36 @@ public class PdfService {
             log.error("Failed to extract images from PDF", e);
             throw new PdfErrorException("Failed to extract images from PDF: " + e.getMessage(), e);
         }
+    }
+
+    private void extractImagesFromPage(PDPage page, int pageNum, Integer minWidth, Integer minHeight,
+                                        ZipOutputStream zos) throws IOException {
+        PDResources resources = page.getResources();
+        int imageIndex = 0;
+        for (var xObjectName : resources.getXObjectNames()) {
+            PDXObject xObject = resources.getXObject(xObjectName);
+            if (xObject instanceof PDImageXObject imageXObject
+                    && meetsMinDimensions(imageXObject, minWidth, minHeight)) {
+                writeImageToZip(imageXObject, pageNum, imageIndex, zos);
+                imageIndex++;
+            }
+        }
+    }
+
+    private boolean meetsMinDimensions(PDImageXObject image, Integer minWidth, Integer minHeight) {
+        if (minWidth != null && image.getWidth() < minWidth) return false;
+        if (minHeight != null && image.getHeight() < minHeight) return false;
+        return true;
+    }
+
+    private void writeImageToZip(PDImageXObject imageXObject, int pageNum, int index,
+                                  ZipOutputStream zos) throws IOException {
+        String suffix = imageXObject.getSuffix() != null ? imageXObject.getSuffix() : "png";
+        String formatName = suffix.equalsIgnoreCase("jpg") ? "jpeg" : suffix;
+        BufferedImage image = imageXObject.getImage();
+        ByteArrayOutputStream imgOut = new ByteArrayOutputStream();
+        ImageIO.write(image, formatName, imgOut);
+        addToZip(zos, String.format("image_page%d_%d.%s", pageNum, index, suffix), imgOut.toByteArray());
     }
 
     public PdfResult crop(MultipartFile file, Float x, Float y, Float width, Float height,
@@ -1410,8 +1363,8 @@ public class PdfService {
             );
 
             int totalPages = pdfDocument.getNumberOfPages();
-            int start = (startPage != null && startPage >= 1) ? startPage : 1;
-            int end = (endPage != null && endPage <= totalPages) ? endPage : totalPages;
+            int start = getValidStartPage(startPage);
+            int end = getValidEndPage(endPage, totalPages);
 
             if (start > end) {
                 pdfDocument.close();
@@ -1450,6 +1403,7 @@ public class PdfService {
         if (fields == null || fields.isEmpty()) {
             throw new PdfErrorException("Fields map must not be empty");
         }
+        validateFormFieldNames(fields);
 
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
@@ -1498,6 +1452,23 @@ public class PdfService {
             log.error("Failed to fill PDF form", e);
             throw new PdfErrorException("Failed to fill PDF form: " + e.getMessage(), e);
         }
+    }
+
+    private void validateFormFieldNames(Map<String, String> fields) {
+        for (String name : fields.keySet()) {
+            if (name == null || name.isBlank()) {
+                throw new PdfErrorException("Form field name must not be empty");
+            }
+            if (name.contains("..") || name.contains("/") || name.contains("\\") || name.contains("\0")) {
+                throw new PdfErrorException("Invalid form field name contains path traversal characters");
+            }
+        }
+    }
+
+    private void addToZip(ZipOutputStream zos, String entryName, byte[] data) throws IOException {
+        zos.putNextEntry(new ZipEntry(entryName));
+        zos.write(data);
+        zos.closeEntry();
     }
 
     private String timestamp() {
