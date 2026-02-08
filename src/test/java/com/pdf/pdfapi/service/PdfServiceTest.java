@@ -6,7 +6,7 @@ import com.itextpdf.kernel.pdf.canvas.parser.PdfTextExtractor;
 import com.pdf.pdfapi.dto.*;
 import com.pdf.pdfapi.exception.PdfErrorException;
 import lombok.SneakyThrows;
-import org.junit.jupiter.api.BeforeEach;
+import net.sourceforge.tess4j.ITesseract;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -14,16 +14,22 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.multipart.MultipartFile;
 
+import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class PdfServiceTest {
+
+    @Mock
+    private TesseractFactory tesseractFactory;
 
     @InjectMocks
     private PdfService pdfService;
@@ -659,5 +665,60 @@ class PdfServiceTest {
         try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
             assertEquals(2, document.getNumberOfPages());
         }
+    }
+
+    @Test
+    @SneakyThrows
+    void ocrToTextGivenValidPdfExpectTextExtracted() {
+        MultipartFile file = mock(MultipartFile.class);
+        ITesseract mockTesseract = mock(ITesseract.class);
+
+        when(file.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/merge/file1.pdf")));
+        when(tesseractFactory.create("eng")).thenReturn(mockTesseract);
+        when(mockTesseract.doOCR(any(BufferedImage.class))).thenReturn("Hello World");
+
+        byte[] result = pdfService.ocrToText(file, "eng", null, null);
+
+        assertNotNull(result);
+        String text = new String(result, StandardCharsets.UTF_8);
+        assertTrue(text.contains("Hello World"));
+        assertTrue(text.contains("--- Page 1 ---"));
+        verify(tesseractFactory).create("eng");
+        verify(mockTesseract).doOCR(any(BufferedImage.class));
+    }
+
+    @Test
+    @SneakyThrows
+    void ocrToPdfGivenValidPdfExpectSearchablePdf() {
+        MultipartFile file = mock(MultipartFile.class);
+        ITesseract mockTesseract = mock(ITesseract.class);
+
+        when(file.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/merge/file1.pdf")));
+        when(tesseractFactory.create("eng")).thenReturn(mockTesseract);
+        when(mockTesseract.doOCR(any(BufferedImage.class))).thenReturn("Hello World");
+
+        PdfResult result = pdfService.ocrToPdf(file, "eng", null, null, null);
+
+        assertNotNull(result);
+        assertNotNull(result.content());
+        assertTrue(result.content().length > 0);
+        assertTrue(result.suggestedFileName().contains("ocr"));
+        assertEquals(1, result.pageCount());
+        verify(tesseractFactory).create("eng");
+    }
+
+    @Test
+    @SneakyThrows
+    void ocrToTextGivenNullLanguageExpectsDefaultLanguage() {
+        MultipartFile file = mock(MultipartFile.class);
+        ITesseract mockTesseract = mock(ITesseract.class);
+
+        when(file.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/merge/file1.pdf")));
+        when(tesseractFactory.create("eng")).thenReturn(mockTesseract);
+        when(mockTesseract.doOCR(any(BufferedImage.class))).thenReturn("text");
+
+        pdfService.ocrToText(file, null, null, null);
+
+        verify(tesseractFactory).create("eng");
     }
 }

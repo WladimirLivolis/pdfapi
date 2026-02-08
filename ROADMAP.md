@@ -14,7 +14,7 @@ Este documento registra o plano de evolução do projeto PDF API, transformando-
   - [x] **Fase 3A** - Quick Wins ✅ **CONCLUÍDA**
   - [x] **Fase 3B** - High Impact ✅ **CONCLUÍDA**
   - [x] **Fase 3C** - Advanced Features ✅ **CONCLUÍDA**
-  - [ ] **Fase 3D** - Specialized
+  - [x] **Fase 3D** - Specialized ✅ **CONCLUÍDA**
 - [ ] **Fase 4** - Observabilidade e DevOps (Contínuo)
 
 ---
@@ -489,13 +489,13 @@ A Fase 3 foi dividida em subfases para facilitar a implementação incremental:
 
 ### Funcionalidades:
 
-#### 3D.1 OCR (Reconhecimento Óptico de Caracteres)
-- [ ] Integração com Tesseract OCR
-- [ ] Endpoint POST `/pdfapi/ocr`
-- [ ] Suporte para múltiplos idiomas (por, eng, spa)
-- [ ] Retornar PDF pesquisável (searchable PDF)
-- [ ] Opção de retornar apenas texto extraído
-- [ ] **ATENÇÃO:** Processamento muito pesado, considerar async obrigatório
+#### 3D.1 OCR (Reconhecimento Óptico de Caracteres) ✅
+- [x] Integração com Tesseract OCR via Tess4J 5.11.0
+- [x] Endpoint POST `/pdfapi/ocr`
+- [x] Suporte para múltiplos idiomas (eng, por, spa, fra, deu, etc.)
+- [x] Retornar PDF pesquisável (searchable PDF com camada de texto invisível)
+- [x] Opção de retornar apenas texto extraído (`outputType=text`)
+- [x] Rate limiting muito restritivo: 1 req/5min (`pdfapi-ocr`)
 
 **Complexidade:** ⭐⭐⭐⭐⭐ Muito Difícil
 **Biblioteca:** Tesseract OCR (externa)
@@ -859,4 +859,35 @@ Garantir visibilidade, monitoramento e automação de deploy.
 - Fase 3C: 5 features ✅
 - Próximo: Fase 3D (OCR) ou Fase 4
 
-**Última atualização:** 2026-02-08 - Fase 3C Concluída
+**Sessão 6 - Fase 3D:**
+- ✅ **Fase 3D CONCLUÍDA** (OCR com Tesseract implementado)
+  - ✅ Tess4J 5.11.0 adicionado como dependência
+  - ✅ `TesseractFactory` interface para testabilidade
+  - ✅ `OcrConfig` com configuração via `TESSERACT_DATAPATH` env var
+  - ✅ Rate limiter `pdfapi-ocr` (1 req/5min)
+  - ✅ `outputType=text`: retorna texto extraído (text/plain)
+  - ✅ `outputType=pdf`: retorna PDF pesquisável com imagem + camada de texto invisível
+  - ✅ Idioma configurável (eng, por, spa, etc.)
+  - ✅ 58 testes passando (5 novos)
+
+**Arquivos Criados (Fase 3D):**
+- `src/main/java/com/pdf/pdfapi/service/TesseractFactory.java`
+- `src/main/java/com/pdf/pdfapi/config/OcrConfig.java`
+
+**Arquivos Modificados (Fase 3D):**
+- `pom.xml` (adicionada dependência tess4j 5.11.0)
+- `src/main/resources/application.yml` (pdfapi-ocr rate limiter + OCR config)
+- `src/main/java/com/pdf/pdfapi/service/PdfService.java` (ocrToText, ocrToPdf, performOcr, resolveLanguage)
+- `src/main/java/com/pdf/pdfapi/controller/PdfController.java` (POST /pdfapi/ocr, validateLanguage)
+- `src/test/java/com/pdf/pdfapi/service/PdfServiceTest.java` (3 novos testes)
+- `src/test/java/com/pdf/pdfapi/controller/PdfControllerTest.java` (2 novos testes)
+
+**Novo Endpoint:**
+1. `POST /pdfapi/ocr` - OCR com saída em texto ou PDF pesquisável
+
+**Status Atual:**
+- **19 operações de PDF implementadas** (de 18 para 19)
+- Fase 3D: 1 feature ✅
+- Fase 3 CONCLUÍDA em sua totalidade
+
+**Última atualização:** 2026-02-08 - Fase 3D Concluída

@@ -38,6 +38,12 @@ resilience4j:
         timeout-duration: 5s
         register-health-indicator: true
 
+      pdfapi-ocr:
+        limit-for-period: 1            # Very restrictive - OCR is computationally expensive
+        limit-refresh-period: 5m
+        timeout-duration: 0s
+        register-health-indicator: true
+
   # Circuit Breaker for additional resilience (optional)
   circuitbreaker:
     instances:
@@ -63,6 +69,11 @@ management:
   health:
     ratelimiters:
       enabled: true
+
+# OCR Configuration
+ocr:
+  tesseract:
+    datapath: ${TESSERACT_DATAPATH:}
 
 # Logging
 logging:

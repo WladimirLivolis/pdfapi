@@ -116,6 +116,12 @@
             <artifactId>pdfbox</artifactId>
             <version>3.0.6</version>
         </dependency>
+
+        <dependency>
+            <groupId>net.sourceforge.tess4j</groupId>
+            <artifactId>tess4j</artifactId>
+            <version>5.18.0</version>
+        </dependency>
     </dependencies>
 
     <build>

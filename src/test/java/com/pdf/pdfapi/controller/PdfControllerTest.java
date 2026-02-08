@@ -465,4 +465,35 @@ class PdfControllerTest {
         verify(pdfService, times(1)).fillForm(eq(file), eq(fields), eq(true));
     }
 
+    @Test
+    void testOcrText() {
+        MultipartFile file = mock(MultipartFile.class);
+        byte[] textBytes = "Hello World".getBytes();
+
+        when(pdfService.ocrToText(file, "eng", null, null)).thenReturn(textBytes);
+
+        pdfController.ocr(file, "eng", "text", null, null, null);
+
+        verify(validator, times(1)).validatePdfFile(file);
+        verify(pdfService, times(1)).ocrToText(file, "eng", null, null);
+    }
+
+    @Test
+    void testOcrPdf() {
+        MultipartFile file = mock(MultipartFile.class);
+        PdfResult mockResult = PdfResult.builder()
+                .content(new byte[]{1, 2, 3})
+                .suggestedFileName("ocr_result.pdf")
+                .sizeInBytes(3)
+                .pageCount(1)
+                .build();
+
+        when(pdfService.ocrToPdf(file, "por", null, null, null)).thenReturn(mockResult);
+
+        pdfController.ocr(file, "por", "pdf", null, null, null);
+
+        verify(validator, times(1)).validatePdfFile(file);
+        verify(pdfService, times(1)).ocrToPdf(file, "por", null, null, null);
+    }
+
 }

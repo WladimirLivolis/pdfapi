@@ -5,6 +5,7 @@ import com.itextpdf.io.image.ImageDataFactory;
 import com.itextpdf.kernel.colors.ColorConstants;
 import com.itextpdf.kernel.font.PdfFont;
 import com.itextpdf.kernel.font.PdfFontFactory;
+import com.itextpdf.kernel.geom.PageSize;
 import com.itextpdf.kernel.geom.Rectangle;
 import com.itextpdf.kernel.pdf.*;
 import com.itextpdf.kernel.pdf.canvas.PdfCanvas;
@@ -29,10 +30,13 @@ import com.pdf.pdfapi.dto.WatermarkRequest;
 import com.pdf.pdfapi.exception.PdfErrorException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
+import net.sourceforge.tess4j.ITesseract;
+import net.sourceforge.tess4j.TesseractException;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDResources;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.graphics.PDXObject;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import org.apache.pdfbox.rendering.ImageType;
@@ -43,6 +47,7 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -55,6 +60,8 @@ import java.util.zip.ZipOutputStream;
 @RequiredArgsConstructor
 @Log4j2
 public class PdfService {
+
+    private final TesseractFactory tesseractFactory;
 
     private static final String LOW_COMPRESSION_LEVEL = "LOW";
     private static final String MEDIUM_COMPRESSION_LEVEL = "MEDIUM";
@@ -775,23 +782,10 @@ public class PdfService {
     }
 
     private void applyCompressionToPages(PdfDocument pdfDocument, String compressionLevel) {
+        if (LOW_COMPRESSION_LEVEL.equals(compressionLevel)) {
+            return; // LOW compression uses standard PDF compression only
+        }
         int totalPages = pdfDocument.getNumberOfPages();
-
-        if (HIGH_COMPRESSION_LEVEL.equals(compressionLevel)) {
-            applyHighCompression(pdfDocument, totalPages);
-        } else if (MEDIUM_COMPRESSION_LEVEL.equals(compressionLevel)) {
-            applyMediumCompression(pdfDocument, totalPages);
-        }
-        // LOW compression uses standard PDF compression only
-    }
-
-    private void applyHighCompression(PdfDocument pdfDocument, int totalPages) {
-        for (int i = 1; i <= totalPages; i++) {
-            compressPageResources(pdfDocument.getPage(i));
-        }
-    }
-
-    private void applyMediumCompression(PdfDocument pdfDocument, int totalPages) {
         for (int i = 1; i <= totalPages; i++) {
             compressPageResources(pdfDocument.getPage(i));
         }
@@ -1334,9 +1328,8 @@ public class PdfService {
     }
 
     private boolean meetsMinDimensions(PDImageXObject image, Integer minWidth, Integer minHeight) {
-        if (minWidth != null && image.getWidth() < minWidth) return false;
-        if (minHeight != null && image.getHeight() < minHeight) return false;
-        return true;
+        return (minWidth == null || image.getWidth() >= minWidth)
+                && (minHeight == null || image.getHeight() >= minHeight);
     }
 
     private void writeImageToZip(PDImageXObject imageXObject, int pageNum, int index,
@@ -1463,6 +1456,133 @@ public class PdfService {
                 throw new PdfErrorException("Invalid form field name contains path traversal characters");
             }
         }
+    }
+
+    public byte[] ocrToText(MultipartFile file, String language, Integer startPage, Integer endPage) {
+        String lang = resolveLanguage(language);
+        try {
+            byte[] pdfBytes = file.getBytes();
+            PDDocument document = Loader.loadPDF(pdfBytes);
+            int totalPages = document.getNumberOfPages();
+            int start = getValidStartPage(startPage) - 1;
+            int end = getValidEndPage(endPage, totalPages) - 1;
+
+            if (start > end) {
+                document.close();
+                throw new PdfErrorException("startPage must be less than or equal to endPage");
+            }
+
+            PDFRenderer renderer = new PDFRenderer(document);
+            ITesseract tesseract = tesseractFactory.create(lang);
+            StringBuilder text = new StringBuilder();
+
+            for (int i = start; i <= end; i++) {
+                BufferedImage image = renderer.renderImageWithDPI(i, 300, ImageType.RGB);
+                String pageText = performOcr(tesseract, image, i + 1);
+                text.append("--- Page ").append(i + 1).append(" ---\n");
+                text.append(pageText).append("\n\n");
+            }
+
+            document.close();
+            log.info("Successfully performed OCR text extraction on {} pages", end - start + 1);
+            return text.toString().getBytes(StandardCharsets.UTF_8);
+
+        } catch (PdfErrorException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to perform OCR text extraction", e);
+            throw new PdfErrorException("Failed to perform OCR: " + e.getMessage(), e);
+        }
+    }
+
+    public PdfResult ocrToPdf(MultipartFile file, String language, Integer startPage, Integer endPage, Integer dpi) {
+        String lang = resolveLanguage(language);
+        int resolvedDpi = (dpi != null && dpi > 0) ? dpi : 300;
+        try {
+            byte[] pdfBytes = file.getBytes();
+            PDDocument document = Loader.loadPDF(pdfBytes);
+            int totalPages = document.getNumberOfPages();
+            int start = getValidStartPage(startPage) - 1;
+            int end = getValidEndPage(endPage, totalPages) - 1;
+
+            if (start > end) {
+                document.close();
+                throw new PdfErrorException("startPage must be less than or equal to endPage");
+            }
+
+            PDFRenderer renderer = new PDFRenderer(document);
+            ITesseract tesseract = tesseractFactory.create(lang);
+            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+            PdfDocument resultPdf = new PdfDocument(new PdfWriter(outputStream));
+            PdfFont font = PdfFontFactory.createFont();
+
+            for (int i = start; i <= end; i++) {
+                BufferedImage image = renderer.renderImageWithDPI(i, resolvedDpi, ImageType.RGB);
+                String pageText = performOcr(tesseract, image, i + 1);
+
+                PDRectangle mediaBox = document.getPage(i).getMediaBox();
+                float pageWidth = mediaBox.getWidth();
+                float pageHeight = mediaBox.getHeight();
+
+                PdfPage pdfPage = resultPdf.addNewPage(new PageSize(pageWidth, pageHeight));
+                PdfCanvas canvas = new PdfCanvas(pdfPage);
+
+                ByteArrayOutputStream imgBaos = new ByteArrayOutputStream();
+                ImageIO.write(image, "png", imgBaos);
+                ImageData imageData = ImageDataFactory.create(imgBaos.toByteArray());
+                canvas.addImageWithTransformationMatrix(imageData, pageWidth, 0, 0, pageHeight, 0, 0);
+
+                String cleanText = pageText.replace("\n", " ").replace("\r", " ").trim();
+                if (!cleanText.isEmpty()) {
+                    try {
+                        canvas.beginText()
+                              .setFontAndSize(font, 1)
+                              .setTextRenderingMode(3)
+                              .moveText(0, pageHeight / 2)
+                              .showText(cleanText)
+                              .endText();
+                    } catch (Exception e) {
+                        log.warn("Could not add invisible text layer for page {}", i + 1);
+                    }
+                }
+            }
+
+            resultPdf.close();
+            document.close();
+
+            byte[] resultBytes = outputStream.toByteArray();
+            String fileName = String.format("ocr_%s.pdf", timestamp());
+            log.info("Successfully created searchable PDF with {} pages ({} bytes)", end - start + 1, resultBytes.length);
+
+            return PdfResult.builder()
+                    .content(resultBytes)
+                    .suggestedFileName(fileName)
+                    .sizeInBytes(resultBytes.length)
+                    .pageCount(end - start + 1)
+                    .build();
+
+        } catch (PdfErrorException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("Failed to create searchable PDF", e);
+            throw new PdfErrorException("Failed to create searchable PDF: " + e.getMessage(), e);
+        }
+    }
+
+    private String performOcr(ITesseract tesseract, BufferedImage image, int pageNumber) {
+        try {
+            return tesseract.doOCR(image);
+        } catch (UnsatisfiedLinkError e) {
+            log.error("Tesseract native library not found", e);
+            throw new PdfErrorException("Tesseract OCR is not available. Please install Tesseract on the system.");
+        } catch (TesseractException e) {
+            log.error("OCR failed on page {}", pageNumber, e);
+            throw new PdfErrorException("OCR failed on page " + pageNumber + ": " + e.getMessage(), e);
+        }
+    }
+
+    private String resolveLanguage(String language) {
+        return (language != null && !language.isBlank()) ? language : "eng";
     }
 
     private void addToZip(ZipOutputStream zos, String entryName, byte[] data) throws IOException {

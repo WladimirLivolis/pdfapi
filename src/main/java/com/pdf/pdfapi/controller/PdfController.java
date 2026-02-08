@@ -262,6 +262,31 @@ public class PdfController {
         return buildPdfResponse(result);
     }
 
+    @PostMapping("/ocr")
+    @RateLimiter(name = "pdfapi-ocr")
+    public ResponseEntity<Resource> ocr(@RequestParam MultipartFile file,
+                                         @RequestParam(required = false, defaultValue = "eng") String language,
+                                         @RequestParam(required = false, defaultValue = "text") String outputType,
+                                         @RequestParam(required = false) Integer startPage,
+                                         @RequestParam(required = false) Integer endPage,
+                                         @RequestParam(required = false) Integer dpi) {
+        validator.validatePdfFile(file);
+        validateLanguage(language);
+
+        if ("pdf".equalsIgnoreCase(outputType)) {
+            PdfResult result = pdfService.ocrToPdf(file, language, startPage, endPage, dpi);
+            return buildPdfResponse(result);
+        } else {
+            byte[] textBytes = pdfService.ocrToText(file, language, startPage, endPage);
+            ByteArrayResource resource = new ByteArrayResource(textBytes);
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"ocr_result.txt\"")
+                    .contentType(MediaType.TEXT_PLAIN)
+                    .contentLength(textBytes.length)
+                    .body(resource);
+        }
+    }
+
     @PostMapping("/fillForm")
     @RateLimiter(name = "pdfapi")
     public ResponseEntity<Resource> fillForm(@RequestParam MultipartFile file,
@@ -275,6 +300,13 @@ public class PdfController {
             return buildPdfResponse(result);
         } catch (Exception e) {
             throw new IllegalArgumentException("Invalid fieldsJson: must be a valid JSON object with string values");
+        }
+    }
+
+    private void validateLanguage(String language) {
+        if (!language.matches("[a-z_]{2,10}")) {
+            throw new IllegalArgumentException(
+                    "Invalid language code '" + language + "'. Use standard Tesseract language codes (e.g. eng, por, spa, fra, deu).");
         }
     }
 
