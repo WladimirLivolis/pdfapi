@@ -490,7 +490,7 @@ A Fase 3 foi dividida em subfases para facilitar a implementação incremental:
 ### Funcionalidades:
 
 #### 3D.1 OCR (Reconhecimento Óptico de Caracteres) ✅
-- [x] Integração com Tesseract OCR via Tess4J 5.11.0
+- [x] Integração com Tesseract OCR via Tess4J 5.18.0
 - [x] Endpoint POST `/pdfapi/ocr`
 - [x] Suporte para múltiplos idiomas (eng, por, spa, fra, deu, etc.)
 - [x] Retornar PDF pesquisável (searchable PDF com camada de texto invisível)
@@ -834,13 +834,13 @@ Garantir visibilidade, monitoramento e automação de deploy.
   - ✅ Merge with Bookmarks: parâmetro `createBookmarks` adicionado ao merge
   - ✅ Build compilando sem erros
   - ✅ 5 novos endpoints implementados (4 novos + 1 atualizado)
-  - ✅ Apache PDFBox 3.0.3 adicionado como dependência
+  - ✅ Apache PDFBox 3.0.6 adicionado como dependência
 
 **Arquivos Criados (Fase 3C):**
 - `src/main/java/com/pdf/pdfapi/dto/FormFillRequest.java`
 
 **Arquivos Modificados (Fase 3C):**
-- `pom.xml` (adicionada dependência Apache PDFBox 3.0.3)
+- `pom.xml` (adicionada dependência Apache PDFBox 3.0.6)
 - `src/main/java/com/pdf/pdfapi/service/PdfService.java` (4 novos métodos + merge melhorado)
 - `src/main/java/com/pdf/pdfapi/controller/PdfController.java` (4 novos endpoints + merge atualizado)
 - `src/test/java/com/pdf/pdfapi/controller/PdfControllerTest.java` (5 novos testes)
@@ -861,7 +861,7 @@ Garantir visibilidade, monitoramento e automação de deploy.
 
 **Sessão 6 - Fase 3D:**
 - ✅ **Fase 3D CONCLUÍDA** (OCR com Tesseract implementado)
-  - ✅ Tess4J 5.11.0 adicionado como dependência
+  - ✅ Tess4J 5.18.0 adicionado como dependência
   - ✅ `TesseractFactory` interface para testabilidade
   - ✅ `OcrConfig` com configuração via `TESSERACT_DATAPATH` env var
   - ✅ Rate limiter `pdfapi-ocr` (1 req/5min)
@@ -875,7 +875,7 @@ Garantir visibilidade, monitoramento e automação de deploy.
 - `src/main/java/com/pdf/pdfapi/config/OcrConfig.java`
 
 **Arquivos Modificados (Fase 3D):**
-- `pom.xml` (adicionada dependência tess4j 5.11.0)
+- `pom.xml` (adicionada dependência tess4j 5.18.0)
 - `src/main/resources/application.yml` (pdfapi-ocr rate limiter + OCR config)
 - `src/main/java/com/pdf/pdfapi/service/PdfService.java` (ocrToText, ocrToPdf, performOcr, resolveLanguage)
 - `src/main/java/com/pdf/pdfapi/controller/PdfController.java` (POST /pdfapi/ocr, validateLanguage)

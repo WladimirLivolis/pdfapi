@@ -82,7 +82,7 @@ public class PdfService {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
             PdfDocument pdfDocument = new PdfDocument(
-                    new PdfReader(new ByteArrayInputStream(file[0].getBytes())),
+                    toPdfReader(file[0]),
                     new PdfWriter(outputStream)
             );
             PdfMerger merger = new PdfMerger(pdfDocument);
@@ -90,7 +90,6 @@ public class PdfService {
             boolean addBookmarks = Boolean.TRUE.equals(createBookmarks);
             PdfOutline rootOutline = addBookmarks ? pdfDocument.getOutlines(true) : null;
 
-            // Add bookmark for first file
             if (addBookmarks && rootOutline != null) {
                 String firstName = file[0].getOriginalFilename() != null ? file[0].getOriginalFilename() : "Document 1";
                 PdfOutline outline = rootOutline.addOutline(firstName);
@@ -98,7 +97,7 @@ public class PdfService {
             }
 
             for (int i = 1; i < file.length; i++) {
-                PdfDocument pdfDocument2 = new PdfDocument(new PdfReader(new ByteArrayInputStream(file[i].getBytes())));
+                PdfDocument pdfDocument2 = new PdfDocument(toPdfReader(file[i]));
                 int prevCount = pdfDocument.getNumberOfPages();
                 merger.merge(pdfDocument2, 1, pdfDocument2.getNumberOfPages());
                 pdfDocument2.close();
@@ -114,17 +113,8 @@ public class PdfService {
             pdfDocument.close();
 
             byte[] pdfBytes = outputStream.toByteArray();
-            String fileName = String.format("merged_%s.pdf", timestamp());
-
-            log.info("Successfully merged {} files into {} ({} pages, {} bytes)",
-                    file.length, fileName, pageCount, pdfBytes.length);
-
-            return PdfResult.builder()
-                    .content(pdfBytes)
-                    .suggestedFileName(fileName)
-                    .sizeInBytes(pdfBytes.length)
-                    .pageCount(pageCount)
-                    .build();
+            log.info("Successfully merged {} files into {} pages ({} bytes)", file.length, pageCount, pdfBytes.length);
+            return buildPdfResult(pdfBytes, "merged", pageCount);
 
         } catch (PdfErrorException e) {
             throw e;
@@ -143,7 +133,7 @@ public class PdfService {
             List<PdfResult> results = new ArrayList<>();
             List<ByteArrayOutputStream> outputStreams = new ArrayList<>();
 
-            PdfDocument pdfDocument = new PdfDocument(new PdfReader(new ByteArrayInputStream(file.getBytes())));
+            PdfDocument pdfDocument = new PdfDocument(toPdfReader(file));
             String baseFileName = String.format("splitDocument_%s_", timestamp());
 
             PdfSplitter pdfSplitter = new PdfSplitter(pdfDocument) {
@@ -158,7 +148,6 @@ public class PdfService {
             List<PdfDocument> splitDocuments = pdfSplitter.splitByPageCount(maxPageCount);
             pdfDocument.close();
 
-            // Convert each split document to PdfResult
             for (int i = 0; i < splitDocuments.size(); i++) {
                 PdfDocument doc = splitDocuments.get(i);
                 int pageCount = doc.getNumberOfPages();
@@ -199,7 +188,7 @@ public class PdfService {
 
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            PdfDocument pdfDocument = new PdfDocument(new PdfReader(new ByteArrayInputStream(file.getBytes())));
+            PdfDocument pdfDocument = new PdfDocument(toPdfReader(file));
 
             int totalPages = pdfDocument.getNumberOfPages();
             if (endPage > totalPages) {
@@ -220,16 +209,8 @@ public class PdfService {
             pdfDocument.close();
 
             byte[] pdfBytes = outputStream.toByteArray();
-            String fileName = String.format("extractedPages_%s.pdf", timestamp());
-
             log.info("Successfully extracted pages {}-{} ({} pages, {} bytes)", startPage, endPage, pageCount, pdfBytes.length);
-
-            return PdfResult.builder()
-                    .content(pdfBytes)
-                    .suggestedFileName(fileName)
-                    .sizeInBytes(pdfBytes.length)
-                    .pageCount(pageCount)
-                    .build();
+            return buildPdfResult(pdfBytes, "extractedPages", pageCount);
 
         } catch (PdfErrorException e) {
             throw e;
@@ -247,23 +228,12 @@ public class PdfService {
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             PdfDocument pdfDocument = new PdfDocument(
-                    new PdfReader(new ByteArrayInputStream(file.getBytes())),
+                    toPdfReader(file),
                     new PdfWriter(outputStream)
             );
 
             int totalPages = pdfDocument.getNumberOfPages();
-
-            // Validate all page numbers first
-            for (Integer pageNumber : page) {
-                if (pageNumber == null || pageNumber < 1) {
-                    pdfDocument.close();
-                    throw new PdfErrorException("Page numbers must be at least 1");
-                }
-                if (pageNumber > totalPages) {
-                    pdfDocument.close();
-                    throw new PdfErrorException(String.format("Page number %d exceeds document page count (%d)", pageNumber, totalPages));
-                }
-            }
+            validatePageNumbers(page, totalPages, pdfDocument);
 
             int removeCount = 0;
             for (Integer pageNumber : page) {
@@ -274,16 +244,8 @@ public class PdfService {
             pdfDocument.close();
 
             byte[] pdfBytes = outputStream.toByteArray();
-            String fileName = String.format("removedPages_%s.pdf", timestamp());
-
             log.info("Successfully removed {} pages ({} pages remaining, {} bytes)", page.length, finalPageCount, pdfBytes.length);
-
-            return PdfResult.builder()
-                    .content(pdfBytes)
-                    .suggestedFileName(fileName)
-                    .sizeInBytes(pdfBytes.length)
-                    .pageCount(finalPageCount)
-                    .build();
+            return buildPdfResult(pdfBytes, "removedPages", finalPageCount);
 
         } catch (PdfErrorException e) {
             throw e;
@@ -309,7 +271,7 @@ public class PdfService {
 
                 ImageData imageData = ImageDataFactory.create(currentFile.getBytes());
                 Image image = new Image(imageData);
-                image.setWidth(pdfDocument.getDefaultPageSize().getWidth() - 50); // 50-point margin on each side
+                image.setWidth(pdfDocument.getDefaultPageSize().getWidth() - 50);
                 image.setAutoScaleHeight(true);
 
                 document.add(image);
@@ -351,7 +313,7 @@ public class PdfService {
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             PdfDocument pdfDocument = new PdfDocument(
-                    new PdfReader(new ByteArrayInputStream(file.getBytes())),
+                    toPdfReader(file),
                     new PdfWriter(outputStream)
             );
 
@@ -367,16 +329,8 @@ public class PdfService {
             pdfDocument.close();
 
             byte[] pdfBytes = outputStream.toByteArray();
-            String fileName = String.format("rotated_%s.pdf", timestamp());
-
             log.info("Successfully rotated PDF ({} pages, {} bytes)", pageCount, pdfBytes.length);
-
-            return PdfResult.builder()
-                    .content(pdfBytes)
-                    .suggestedFileName(fileName)
-                    .sizeInBytes(pdfBytes.length)
-                    .pageCount(pageCount)
-                    .build();
+            return buildPdfResult(pdfBytes, "rotated", pageCount);
 
         } catch (PdfErrorException e) {
             throw e;
@@ -442,13 +396,12 @@ public class PdfService {
 
     public PdfInfoResponse getInfo(MultipartFile file) {
         try {
-            PdfDocument pdfDocument = new PdfDocument(new PdfReader(new ByteArrayInputStream(file.getBytes())));
+            PdfDocument pdfDocument = new PdfDocument(toPdfReader(file));
 
             int pageCount = pdfDocument.getNumberOfPages();
             long fileSize = file.getSize();
             String pdfVersion = pdfDocument.getPdfVersion().toString();
 
-            // Get first page dimensions
             PdfPage firstPage = pdfDocument.getPage(1);
             Rectangle firstPageSize = firstPage.getPageSize();
             PdfInfoResponse.PageDimensions firstPageDimensions = PdfInfoResponse.PageDimensions.builder()
@@ -457,7 +410,6 @@ public class PdfService {
                     .unit("points")
                     .build();
 
-            // Check if all pages have the same dimensions
             boolean allPagesSameDimension = true;
             for (int i = 2; i <= pageCount; i++) {
                 Rectangle pageSize = pdfDocument.getPage(i).getPageSize();
@@ -471,7 +423,6 @@ public class PdfService {
             pdfDocument.close();
 
             log.info("Successfully retrieved PDF info: {} pages, {} bytes, version {}", pageCount, fileSize, pdfVersion);
-
             return PdfInfoResponse.success(pageCount, fileSize, pdfVersion, firstPageDimensions, allPagesSameDimension);
 
         } catch (PdfErrorException e) {
@@ -484,7 +435,7 @@ public class PdfService {
 
     public PdfMetadataResponse getMetadata(MultipartFile file) {
         try {
-            PdfDocument pdfDocument = new PdfDocument(new PdfReader(new ByteArrayInputStream(file.getBytes())));
+            PdfDocument pdfDocument = new PdfDocument(toPdfReader(file));
             PdfDocumentInfo info = pdfDocument.getDocumentInfo();
 
             String title = info.getTitle();
@@ -494,14 +445,12 @@ public class PdfService {
             String creator = info.getCreator();
             String producer = info.getProducer();
 
-            // Get dates using getMoreInfo() which is public
             String creationDate = info.getMoreInfo(PdfName.CreationDate.getValue());
             String modificationDate = info.getMoreInfo(PdfName.ModDate.getValue());
 
             pdfDocument.close();
 
             log.info("Successfully retrieved PDF metadata for file");
-
             return PdfMetadataResponse.success(title, author, subject, keywords, creator, producer, creationDate, modificationDate);
 
         } catch (PdfErrorException e) {
@@ -520,42 +469,23 @@ public class PdfService {
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             PdfDocument pdfDocument = new PdfDocument(
-                    new PdfReader(new ByteArrayInputStream(file.getBytes())),
+                    toPdfReader(file),
                     new PdfWriter(outputStream)
             );
             PdfDocumentInfo info = pdfDocument.getDocumentInfo();
 
-            // Update metadata fields if provided
-            if (metadata.title() != null) {
-                info.setTitle(metadata.title());
-            }
-            if (metadata.author() != null) {
-                info.setAuthor(metadata.author());
-            }
-            if (metadata.subject() != null) {
-                info.setSubject(metadata.subject());
-            }
-            if (metadata.keywords() != null) {
-                info.setKeywords(metadata.keywords());
-            }
-            if (metadata.creator() != null) {
-                info.setCreator(metadata.creator());
-            }
+            if (metadata.title() != null) info.setTitle(metadata.title());
+            if (metadata.author() != null) info.setAuthor(metadata.author());
+            if (metadata.subject() != null) info.setSubject(metadata.subject());
+            if (metadata.keywords() != null) info.setKeywords(metadata.keywords());
+            if (metadata.creator() != null) info.setCreator(metadata.creator());
 
             int pageCount = pdfDocument.getNumberOfPages();
             pdfDocument.close();
 
             byte[] pdfBytes = outputStream.toByteArray();
-            String fileName = String.format("metadata_updated_%s.pdf", timestamp());
-
             log.info("Successfully updated PDF metadata ({} pages, {} bytes)", pageCount, pdfBytes.length);
-
-            return PdfResult.builder()
-                    .content(pdfBytes)
-                    .suggestedFileName(fileName)
-                    .sizeInBytes(pdfBytes.length)
-                    .pageCount(pageCount)
-                    .build();
+            return buildPdfResult(pdfBytes, "metadata_updated", pageCount);
 
         } catch (PdfErrorException e) {
             throw e;
@@ -573,33 +503,22 @@ public class PdfService {
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             PdfDocument pdfDocument = new PdfDocument(
-                    new PdfReader(new ByteArrayInputStream(file.getBytes())),
+                    toPdfReader(file),
                     new PdfWriter(outputStream)
             );
 
             int totalPages = pdfDocument.getNumberOfPages();
-            int start = getValidStartPage(startPage);
-            int end = getValidEndPage(endPage, totalPages);
-
-            validatePageRange(start, end, pdfDocument);
+            PageBounds bounds = resolvePageRange(startPage, endPage, totalPages);
 
             PdfFont font = PdfFontFactory.createFont();
-            addPageNumbersToPdf(pdfDocument, font, pos, fmt, start, end, totalPages);
+            addPageNumbersToPdf(pdfDocument, font, pos, fmt, bounds.start(), bounds.end(), totalPages);
 
             int pageCount = pdfDocument.getNumberOfPages();
             pdfDocument.close();
 
             byte[] pdfBytes = outputStream.toByteArray();
-            String fileName = String.format("numbered_%s.pdf", timestamp());
-
-            log.info("Successfully added page numbers to {} pages ({} bytes)", end - start + 1, pdfBytes.length);
-
-            return PdfResult.builder()
-                    .content(pdfBytes)
-                    .suggestedFileName(fileName)
-                    .sizeInBytes(pdfBytes.length)
-                    .pageCount(pageCount)
-                    .build();
+            log.info("Successfully added page numbers to {} pages ({} bytes)", bounds.end() - bounds.start() + 1, pdfBytes.length);
+            return buildPdfResult(pdfBytes, "numbered", pageCount);
 
         } catch (PdfErrorException e) {
             throw e;
@@ -625,11 +544,13 @@ public class PdfService {
         return (endPage != null && endPage <= totalPages) ? endPage : totalPages;
     }
 
-    private void validatePageRange(int start, int end, PdfDocument pdfDocument) {
+    private PageBounds resolvePageRange(Integer startPage, Integer endPage, int totalPages) {
+        int start = getValidStartPage(startPage);
+        int end = getValidEndPage(endPage, totalPages);
         if (start > end) {
-            pdfDocument.close();
             throw new PdfErrorException("startPage must be less than or equal to endPage");
         }
+        return new PageBounds(start, end);
     }
 
     private void addPageNumbersToPdf(PdfDocument pdfDocument, PdfFont font, String position,
@@ -696,9 +617,6 @@ public class PdfService {
         canvas.close();
     }
 
-    /**
-     * Represents the position configuration for page numbers
-     */
     private static class PageNumberPosition {
         private final String vertical;
         private final String horizontal;
@@ -721,9 +639,6 @@ public class PdfService {
         }
     }
 
-    /**
-     * Represents the coordinates and alignment for drawing page numbers
-     */
     private record PageCoordinates(float x, float y, TextAlignment alignment) {
     }
 
@@ -735,10 +650,7 @@ public class PdfService {
             WriterProperties writerProperties = configureCompressionWriter(compressionLevel);
 
             PdfWriter writer = new PdfWriter(outputStream, writerProperties);
-            PdfDocument pdfDocument = new PdfDocument(
-                    new PdfReader(new ByteArrayInputStream(file.getBytes())),
-                    writer
-            );
+            PdfDocument pdfDocument = new PdfDocument(toPdfReader(file), writer);
 
             applyCompressionToPages(pdfDocument, compressionLevel);
 
@@ -746,16 +658,8 @@ public class PdfService {
             pdfDocument.close();
 
             byte[] pdfBytes = outputStream.toByteArray();
-            String fileName = String.format("compressed_%s_%s.pdf", compressionLevel.toLowerCase(), timestamp());
-
             logCompressionResult(compressionLevel, file.getSize(), pdfBytes.length, pageCount);
-
-            return PdfResult.builder()
-                    .content(pdfBytes)
-                    .suggestedFileName(fileName)
-                    .sizeInBytes(pdfBytes.length)
-                    .pageCount(pageCount)
-                    .build();
+            return buildPdfResult(pdfBytes, "compressed_" + compressionLevel.toLowerCase(), pageCount);
 
         } catch (PdfErrorException e) {
             throw e;
@@ -783,7 +687,7 @@ public class PdfService {
 
     private void applyCompressionToPages(PdfDocument pdfDocument, String compressionLevel) {
         if (LOW_COMPRESSION_LEVEL.equals(compressionLevel)) {
-            return; // LOW compression uses standard PDF compression only
+            return;
         }
         int totalPages = pdfDocument.getNumberOfPages();
         for (int i = 1; i <= totalPages; i++) {
@@ -840,27 +744,15 @@ public class PdfService {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             WriterProperties writerProperties = createEncryptedWriter(config);
 
-            PdfWriter writer = new PdfWriter(outputStream, writerProperties);
-            PdfDocument pdfDocument = new PdfDocument(
-                    new PdfReader(new ByteArrayInputStream(file.getBytes())),
-                    writer
-            );
+            PdfDocument pdfDocument = new PdfDocument(toPdfReader(file), new PdfWriter(outputStream, writerProperties));
 
             int pageCount = pdfDocument.getNumberOfPages();
             pdfDocument.close();
 
             byte[] pdfBytes = outputStream.toByteArray();
-            String fileName = String.format("encrypted_%s.pdf", timestamp());
-
             log.info("Successfully encrypted PDF with {} encryption ({} pages)",
-                    getEncryptionTypeName(config.encryptionType), pageCount);
-
-            return PdfResult.builder()
-                    .content(pdfBytes)
-                    .suggestedFileName(fileName)
-                    .sizeInBytes(pdfBytes.length)
-                    .pageCount(pageCount)
-                    .build();
+                    getEncryptionTypeName(config.encryptionType()), pageCount);
+            return buildPdfResult(pdfBytes, "encrypted", pageCount);
 
         } catch (PdfErrorException e) {
             throw e;
@@ -911,17 +803,14 @@ public class PdfService {
     private WriterProperties createEncryptedWriter(EncryptionConfig config) {
         WriterProperties writerProperties = new WriterProperties();
         writerProperties.setStandardEncryption(
-                config.userPassword.getBytes(),
-                config.ownerPassword.getBytes(),
-                config.permissions,
-                config.encryptionType
+                config.userPassword().getBytes(),
+                config.ownerPassword().getBytes(),
+                config.permissions(),
+                config.encryptionType()
         );
         return writerProperties;
     }
 
-    /**
-     * Holds encryption configuration
-     */
     private record EncryptionConfig(String userPassword, String ownerPassword,
                                      int encryptionType, int permissions) {
     }
@@ -934,28 +823,18 @@ public class PdfService {
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
-            // Create reader with password
             ReaderProperties readerProperties = new ReaderProperties();
             readerProperties.setPassword(password.getBytes());
 
             PdfReader reader = new PdfReader(new ByteArrayInputStream(file.getBytes()), readerProperties);
-            PdfWriter writer = new PdfWriter(outputStream);
-            PdfDocument pdfDocument = new PdfDocument(reader, writer);
+            PdfDocument pdfDocument = new PdfDocument(reader, new PdfWriter(outputStream));
 
             int pageCount = pdfDocument.getNumberOfPages();
             pdfDocument.close();
 
             byte[] pdfBytes = outputStream.toByteArray();
-            String fileName = String.format("decrypted_%s.pdf", timestamp());
-
             log.info("Successfully decrypted PDF ({} pages)", pageCount);
-
-            return PdfResult.builder()
-                    .content(pdfBytes)
-                    .suggestedFileName(fileName)
-                    .sizeInBytes(pdfBytes.length)
-                    .pageCount(pageCount)
-                    .build();
+            return buildPdfResult(pdfBytes, "decrypted", pageCount);
 
         } catch (PdfErrorException e) {
             throw e;
@@ -979,52 +858,25 @@ public class PdfService {
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
-            // Create writer with optimization settings
             WriterProperties writerProperties = new WriterProperties();
-
-            // Enable full compression mode for maximum optimization
             writerProperties.setFullCompressionMode(true);
-
-            // Add linearization (fast web view)
             writerProperties.addXmpMetadata();
 
-            PdfWriter writer = new PdfWriter(outputStream, writerProperties);
-            PdfReader reader = new PdfReader(new ByteArrayInputStream(file.getBytes()));
-
-            PdfDocument pdfDocument = new PdfDocument(reader, writer);
-
-            // Remove unused objects to reduce file size
+            PdfDocument pdfDocument = new PdfDocument(toPdfReader(file), new PdfWriter(outputStream, writerProperties));
             pdfDocument.setFlushUnusedObjects(true);
 
             int pageCount = pdfDocument.getNumberOfPages();
-
-            // Process all pages for optimization
             for (int i = 1; i <= pageCount; i++) {
-                PdfPage page = pdfDocument.getPage(i);
-
-                // Flush page resources to optimize memory
-                page.flush();
+                pdfDocument.getPage(i).flush();
             }
 
             pdfDocument.close();
 
             byte[] pdfBytes = outputStream.toByteArray();
-            long originalSize = file.getSize();
-            long optimizedSize = pdfBytes.length;
-            double reductionPercentage = ((originalSize - optimizedSize) / (double) originalSize) * 100;
-
-            String fileName = String.format("optimized_%s.pdf", timestamp());
-
+            double reductionPercentage = ((file.getSize() - pdfBytes.length) / (double) file.getSize()) * 100;
             log.info("Successfully optimized PDF: {} bytes -> {} bytes ({} % reduction, {} pages)",
-                    originalSize, optimizedSize,
-                    String.format("%.2f", reductionPercentage), pageCount);
-
-            return PdfResult.builder()
-                    .content(pdfBytes)
-                    .suggestedFileName(fileName)
-                    .sizeInBytes(pdfBytes.length)
-                    .pageCount(pageCount)
-                    .build();
+                    file.getSize(), pdfBytes.length, String.format("%.2f", reductionPercentage), pageCount);
+            return buildPdfResult(pdfBytes, "optimized", pageCount);
 
         } catch (PdfErrorException e) {
             throw e;
@@ -1043,11 +895,12 @@ public class PdfService {
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             PdfDocument pdfDocument = new PdfDocument(
-                    new PdfReader(new ByteArrayInputStream(file.getBytes())),
+                    toPdfReader(file),
                     new PdfWriter(outputStream)
             );
 
-            WatermarkPageRange pageRange = calculatePageRange(pdfDocument, request.startPage(), request.endPage());
+            int totalPages = pdfDocument.getNumberOfPages();
+            PageBounds pageRange = resolvePageRange(request.startPage(), request.endPage(), totalPages);
 
             applyWatermark(pdfDocument, request.text(), imageFile, config, pageRange);
 
@@ -1055,17 +908,9 @@ public class PdfService {
             pdfDocument.close();
 
             byte[] pdfBytes = outputStream.toByteArray();
-            String fileName = String.format("watermarked_%s.pdf", timestamp());
-
             log.info("Successfully added watermark to {} pages ({} bytes)",
                     pageRange.end() - pageRange.start() + 1, pdfBytes.length);
-
-            return PdfResult.builder()
-                    .content(pdfBytes)
-                    .suggestedFileName(fileName)
-                    .sizeInBytes(pdfBytes.length)
-                    .pageCount(pageCount)
-                    .build();
+            return buildPdfResult(pdfBytes, "watermarked", pageCount);
 
         } catch (PdfErrorException e) {
             throw e;
@@ -1084,20 +929,8 @@ public class PdfService {
         }
     }
 
-    private WatermarkPageRange calculatePageRange(PdfDocument pdfDocument, Integer startPage, Integer endPage) {
-        int totalPages = pdfDocument.getNumberOfPages();
-        int start = (startPage != null && startPage >= 1) ? startPage : 1;
-        int end = (endPage != null && endPage <= totalPages) ? endPage : totalPages;
-
-        if (start > end) {
-            throw new PdfErrorException("startPage must be less than or equal to endPage");
-        }
-
-        return new WatermarkPageRange(start, end);
-    }
-
     private void applyWatermark(PdfDocument pdfDocument, String text, MultipartFile imageFile,
-                                WatermarkConfig config, WatermarkPageRange pageRange) throws IOException {
+                                WatermarkConfig config, PageBounds pageRange) throws IOException {
         if (text != null) {
             applyTextWatermark(pdfDocument, text, config, pageRange);
         } else {
@@ -1112,21 +945,27 @@ public class PdfService {
         return new PdfCanvas(page);
     }
 
-    /**
-     * Holds watermark configuration
-     */
+    private void setupWatermarkCanvas(PdfCanvas pdfCanvas, WatermarkConfig config, WatermarkPosition pos) {
+        pdfCanvas.saveState();
+        pdfCanvas.setExtGState(createExtGraphicsState(config.opacity()));
+
+        double rotationRadians = Math.toRadians(config.rotation());
+        double cos = Math.cos(rotationRadians);
+        double sin = Math.sin(rotationRadians);
+
+        pdfCanvas.concatMatrix(1, 0, 0, 1, pos.x(), pos.y());
+        pdfCanvas.concatMatrix(cos, sin, -sin, cos, 0, 0);
+    }
+
     private record WatermarkConfig(String position, float opacity, float rotation,
                                     float scale, String layer) {
     }
 
-    /**
-     * Holds page range information for watermark operations
-     */
-    private record WatermarkPageRange(int start, int end) {
+    private record PageBounds(int start, int end) {
     }
 
     private void applyTextWatermark(PdfDocument pdfDocument, String text,
-                                    WatermarkConfig config, WatermarkPageRange pageRange) throws IOException {
+                                    WatermarkConfig config, PageBounds pageRange) throws IOException {
         PdfFont font = PdfFontFactory.createFont();
 
         for (int i = pageRange.start(); i <= pageRange.end(); i++) {
@@ -1135,15 +974,8 @@ public class PdfService {
             WatermarkPosition watermarkPos = calculateWatermarkPosition(pageSize, config.position());
             PdfCanvas pdfCanvas = createLayeredCanvas(page, config.layer());
 
-            pdfCanvas.saveState();
+            setupWatermarkCanvas(pdfCanvas, config, watermarkPos);
             pdfCanvas.setFillColor(ColorConstants.LIGHT_GRAY);
-            pdfCanvas.setExtGState(createExtGraphicsState(config.opacity()));
-            pdfCanvas.concatMatrix(1, 0, 0, 1, watermarkPos.x(), watermarkPos.y());
-            pdfCanvas.concatMatrix(
-                    Math.cos(Math.toRadians(config.rotation())), Math.sin(Math.toRadians(config.rotation())),
-                    -Math.sin(Math.toRadians(config.rotation())), Math.cos(Math.toRadians(config.rotation())),
-                    0, 0
-            );
             pdfCanvas.beginText();
             pdfCanvas.setFontAndSize(font, 60 * config.scale());
             pdfCanvas.showText(text);
@@ -1153,7 +985,7 @@ public class PdfService {
     }
 
     private void applyImageWatermark(PdfDocument pdfDocument, MultipartFile imageFile,
-                                     WatermarkConfig config, WatermarkPageRange pageRange) throws IOException {
+                                     WatermarkConfig config, PageBounds pageRange) throws IOException {
         ImageData imageData = ImageDataFactory.create(imageFile.getBytes());
         Image image = new Image(imageData);
 
@@ -1163,18 +995,10 @@ public class PdfService {
             WatermarkPosition watermarkPos = calculateWatermarkPosition(pageSize, config.position());
             PdfCanvas pdfCanvas = createLayeredCanvas(page, config.layer());
 
-            pdfCanvas.saveState();
-            pdfCanvas.setExtGState(createExtGraphicsState(config.opacity()));
+            setupWatermarkCanvas(pdfCanvas, config, watermarkPos);
 
             float imgWidth = image.getImageWidth() * config.scale();
             float imgHeight = image.getImageHeight() * config.scale();
-
-            pdfCanvas.concatMatrix(1, 0, 0, 1, watermarkPos.x(), watermarkPos.y());
-            pdfCanvas.concatMatrix(
-                    Math.cos(Math.toRadians(config.rotation())), Math.sin(Math.toRadians(config.rotation())),
-                    -Math.sin(Math.toRadians(config.rotation())), Math.cos(Math.toRadians(config.rotation())),
-                    0, 0
-            );
 
             image.scaleToFit(imgWidth, imgHeight);
             image.setFixedPosition(0, 0);
@@ -1239,9 +1063,6 @@ public class PdfService {
         return extGState;
     }
 
-    /**
-     * Represents the position for watermark placement
-     */
     private record WatermarkPosition(float x, float y) {
     }
 
@@ -1251,19 +1072,13 @@ public class PdfService {
         int resolvedDpi = (dpi != null && dpi > 0) ? dpi : 150;
 
         try {
-            byte[] pdfBytes = file.getBytes();
-            PDDocument document = Loader.loadPDF(pdfBytes);
-            PDFRenderer renderer = new PDFRenderer(document);
-
+            PDDocument document = loadPdfBoxDocument(file);
             int totalPages = document.getNumberOfPages();
-            int start = getValidStartPage(startPage) - 1;
-            int end = getValidEndPage(endPage, totalPages) - 1;
+            PageBounds bounds = resolvePageRange(startPage, endPage, totalPages);
+            int start = bounds.start() - 1;
+            int end = bounds.end() - 1;
 
-            if (start > end) {
-                document.close();
-                throw new PdfErrorException("startPage must be less than or equal to endPage");
-            }
-
+            PDFRenderer renderer = new PDFRenderer(document);
             ByteArrayOutputStream zipOut = new ByteArrayOutputStream();
             try (ZipOutputStream zos = new ZipOutputStream(zipOut)) {
                 String imageFormat = "jpg".equals(fmt) ? "jpeg" : "png";
@@ -1289,8 +1104,7 @@ public class PdfService {
 
     public byte[] extractImages(MultipartFile file, Integer minWidth, Integer minHeight) {
         try {
-            byte[] pdfBytes = file.getBytes();
-            PDDocument document = Loader.loadPDF(pdfBytes);
+            PDDocument document = loadPdfBoxDocument(file);
 
             ByteArrayOutputStream zipOut = new ByteArrayOutputStream();
             try (ZipOutputStream zos = new ZipOutputStream(zipOut)) {
@@ -1351,21 +1165,15 @@ public class PdfService {
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             PdfDocument pdfDocument = new PdfDocument(
-                    new PdfReader(new ByteArrayInputStream(file.getBytes())),
+                    toPdfReader(file),
                     new PdfWriter(outputStream)
             );
 
             int totalPages = pdfDocument.getNumberOfPages();
-            int start = getValidStartPage(startPage);
-            int end = getValidEndPage(endPage, totalPages);
-
-            if (start > end) {
-                pdfDocument.close();
-                throw new PdfErrorException("startPage must be less than or equal to endPage");
-            }
+            PageBounds bounds = resolvePageRange(startPage, endPage, totalPages);
 
             Rectangle cropBox = new Rectangle(x, y, width, height);
-            for (int i = start; i <= end; i++) {
+            for (int i = bounds.start(); i <= bounds.end(); i++) {
                 pdfDocument.getPage(i).setCropBox(cropBox);
             }
 
@@ -1373,16 +1181,8 @@ public class PdfService {
             pdfDocument.close();
 
             byte[] pdfBytes = outputStream.toByteArray();
-            String fileName = String.format("cropped_%s.pdf", timestamp());
-
-            log.info("Successfully cropped {} pages ({} bytes)", end - start + 1, pdfBytes.length);
-
-            return PdfResult.builder()
-                    .content(pdfBytes)
-                    .suggestedFileName(fileName)
-                    .sizeInBytes(pdfBytes.length)
-                    .pageCount(pageCount)
-                    .build();
+            log.info("Successfully cropped {} pages ({} bytes)", bounds.end() - bounds.start() + 1, pdfBytes.length);
+            return buildPdfResult(pdfBytes, "cropped", pageCount);
 
         } catch (PdfErrorException e) {
             throw e;
@@ -1401,7 +1201,7 @@ public class PdfService {
         try {
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
             PdfDocument pdfDocument = new PdfDocument(
-                    new PdfReader(new ByteArrayInputStream(file.getBytes())),
+                    toPdfReader(file),
                     new PdfWriter(outputStream)
             );
 
@@ -1428,16 +1228,8 @@ public class PdfService {
             pdfDocument.close();
 
             byte[] pdfBytes = outputStream.toByteArray();
-            String fileName = String.format("filled_%s.pdf", timestamp());
-
             log.info("Successfully filled form with {} fields ({} bytes)", fields.size(), pdfBytes.length);
-
-            return PdfResult.builder()
-                    .content(pdfBytes)
-                    .suggestedFileName(fileName)
-                    .sizeInBytes(pdfBytes.length)
-                    .pageCount(pageCount)
-                    .build();
+            return buildPdfResult(pdfBytes, "filled", pageCount);
 
         } catch (PdfErrorException e) {
             throw e;
@@ -1461,16 +1253,11 @@ public class PdfService {
     public byte[] ocrToText(MultipartFile file, String language, Integer startPage, Integer endPage) {
         String lang = resolveLanguage(language);
         try {
-            byte[] pdfBytes = file.getBytes();
-            PDDocument document = Loader.loadPDF(pdfBytes);
+            PDDocument document = loadPdfBoxDocument(file);
             int totalPages = document.getNumberOfPages();
-            int start = getValidStartPage(startPage) - 1;
-            int end = getValidEndPage(endPage, totalPages) - 1;
-
-            if (start > end) {
-                document.close();
-                throw new PdfErrorException("startPage must be less than or equal to endPage");
-            }
+            PageBounds bounds = resolvePageRange(startPage, endPage, totalPages);
+            int start = bounds.start() - 1;
+            int end = bounds.end() - 1;
 
             PDFRenderer renderer = new PDFRenderer(document);
             ITesseract tesseract = tesseractFactory.create(lang);
@@ -1499,16 +1286,11 @@ public class PdfService {
         String lang = resolveLanguage(language);
         int resolvedDpi = (dpi != null && dpi > 0) ? dpi : 300;
         try {
-            byte[] pdfBytes = file.getBytes();
-            PDDocument document = Loader.loadPDF(pdfBytes);
+            PDDocument document = loadPdfBoxDocument(file);
             int totalPages = document.getNumberOfPages();
-            int start = getValidStartPage(startPage) - 1;
-            int end = getValidEndPage(endPage, totalPages) - 1;
-
-            if (start > end) {
-                document.close();
-                throw new PdfErrorException("startPage must be less than or equal to endPage");
-            }
+            PageBounds bounds = resolvePageRange(startPage, endPage, totalPages);
+            int start = bounds.start() - 1;
+            int end = bounds.end() - 1;
 
             PDFRenderer renderer = new PDFRenderer(document);
             ITesseract tesseract = tesseractFactory.create(lang);
@@ -1551,15 +1333,8 @@ public class PdfService {
             document.close();
 
             byte[] resultBytes = outputStream.toByteArray();
-            String fileName = String.format("ocr_%s.pdf", timestamp());
             log.info("Successfully created searchable PDF with {} pages ({} bytes)", end - start + 1, resultBytes.length);
-
-            return PdfResult.builder()
-                    .content(resultBytes)
-                    .suggestedFileName(fileName)
-                    .sizeInBytes(resultBytes.length)
-                    .pageCount(end - start + 1)
-                    .build();
+            return buildPdfResult(resultBytes, "ocr", end - start + 1);
 
         } catch (PdfErrorException e) {
             throw e;
@@ -1583,6 +1358,23 @@ public class PdfService {
 
     private String resolveLanguage(String language) {
         return (language != null && !language.isBlank()) ? language : "eng";
+    }
+
+    private PdfReader toPdfReader(MultipartFile file) throws IOException {
+        return new PdfReader(new ByteArrayInputStream(file.getBytes()));
+    }
+
+    private PDDocument loadPdfBoxDocument(MultipartFile file) throws IOException {
+        return Loader.loadPDF(file.getBytes());
+    }
+
+    private PdfResult buildPdfResult(byte[] pdfBytes, String fileNamePrefix, int pageCount) {
+        return PdfResult.builder()
+                .content(pdfBytes)
+                .suggestedFileName(String.format("%s_%s.pdf", fileNamePrefix, timestamp()))
+                .sizeInBytes(pdfBytes.length)
+                .pageCount(pageCount)
+                .build();
     }
 
     private void addToZip(ZipOutputStream zos, String entryName, byte[] data) throws IOException {
