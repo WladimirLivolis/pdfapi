@@ -5,6 +5,7 @@ import com.itextpdf.kernel.pdf.PdfReader;
 import com.itextpdf.kernel.pdf.canvas.parser.PdfTextExtractor;
 import com.pdf.pdfapi.dto.*;
 import com.pdf.pdfapi.exception.PdfErrorException;
+import com.pdf.pdfapi.service.image.PdfImageService;
 import com.pdf.pdfapi.service.ocr.PdfOcrService;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
@@ -27,6 +28,9 @@ class PdfServiceTest {
 
     @Mock
     private PdfOcrService pdfOcrService;
+
+    @Mock
+    private PdfImageService pdfImageService;
 
     @InjectMocks
     private PdfService pdfService;
@@ -160,24 +164,21 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void convertImageToPDFGivenImageExpectPdf() {
+    void convertImageToPDFDelegatesToPdfImageService() {
         MultipartFile originalFile = mock(MultipartFile.class);
+        List<PdfResult> expected = List.of(PdfResult.builder()
+                .content(new byte[]{1})
+                .suggestedFileName("image.pdf")
+                .sizeInBytes(1)
+                .pageCount(1)
+                .build());
 
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/image/image.png")));
-        when(originalFile.getOriginalFilename()).thenReturn("image.png");
+        when(pdfImageService.convertImageToPDF(originalFile)).thenReturn(expected);
 
         List<PdfResult> results = pdfService.convertImageToPDF(originalFile);
 
-        // Verify result
-        assertNotNull(results);
-        assertEquals(1, results.size());
-
-        PdfResult result = results.getFirst();
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertTrue(result.suggestedFileName().endsWith(".pdf"));
-        assertTrue(result.suggestedFileName().contains("image"));
-        assertEquals(1, result.pageCount());
+        assertEquals(expected, results);
+        verify(pdfImageService).convertImageToPDF(originalFile);
     }
 
     @SneakyThrows
@@ -725,5 +726,31 @@ class PdfServiceTest {
 
         assertArrayEquals(response, result);
         verify(pdfOcrService).ocrToText(file, null, 1, 2, 200);
+    }
+
+    @Test
+    void toImagesDelegatesToPdfImageService() {
+        MultipartFile file = mock(MultipartFile.class);
+        byte[] expected = new byte[]{1, 2, 3};
+
+        when(pdfImageService.toImages(file, "png", 150, 1, 2)).thenReturn(expected);
+
+        byte[] result = pdfService.toImages(file, "png", 150, 1, 2);
+
+        assertArrayEquals(expected, result);
+        verify(pdfImageService).toImages(file, "png", 150, 1, 2);
+    }
+
+    @Test
+    void extractImagesDelegatesToPdfImageService() {
+        MultipartFile file = mock(MultipartFile.class);
+        byte[] expected = new byte[]{9};
+
+        when(pdfImageService.extractImages(file, 100, 200)).thenReturn(expected);
+
+        byte[] result = pdfService.extractImages(file, 100, 200);
+
+        assertArrayEquals(expected, result);
+        verify(pdfImageService).extractImages(file, 100, 200);
     }
 }
