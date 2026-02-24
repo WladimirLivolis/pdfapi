@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.nio.charset.StandardCharsets;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
@@ -277,7 +278,7 @@ public class PdfController {
             PdfResult result = pdfService.ocrToPdf(file, language, startPage, endPage, dpi);
             return buildPdfResponse(result);
         } else {
-            byte[] textBytes = pdfService.ocrToText(file, language, startPage, endPage);
+            byte[] textBytes = pdfService.ocrToText(file, language, startPage, endPage, dpi);
             ByteArrayResource resource = new ByteArrayResource(textBytes);
             return ResponseEntity.ok()
                     .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"ocr_result.txt\"")
@@ -293,14 +294,16 @@ public class PdfController {
                                               @RequestParam String fieldsJson,
                                               @RequestParam(required = false) Boolean flatten) {
         validator.validatePdfFile(file);
+        Map<String, String> fields;
         try {
             byte[] jsonBytes = fieldsJson.getBytes(StandardCharsets.UTF_8);
-            Map<String, String> fields = objectMapper.readValue(jsonBytes, new TypeReference<>() {});
-            PdfResult result = pdfService.fillForm(file, fields, flatten);
-            return buildPdfResponse(result);
-        } catch (Exception e) {
+            fields = objectMapper.readValue(jsonBytes, new TypeReference<>() {});
+        } catch (IOException e) {
             throw new IllegalArgumentException("Invalid fieldsJson: must be a valid JSON object with string values");
         }
+
+        PdfResult result = pdfService.fillForm(file, fields, flatten);
+        return buildPdfResponse(result);
     }
 
     private void validateLanguage(String language) {

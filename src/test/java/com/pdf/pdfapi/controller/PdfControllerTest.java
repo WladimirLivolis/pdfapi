@@ -13,6 +13,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -466,16 +467,28 @@ class PdfControllerTest {
     }
 
     @Test
+    void testFillFormDoesNotMaskServiceErrorsAsJsonErrors() {
+        MultipartFile file = mock(MultipartFile.class);
+        when(pdfService.fillForm(eq(file), anyMap(), eq(true)))
+                .thenThrow(new com.pdf.pdfapi.exception.PdfErrorException("PDF does not contain an AcroForm"));
+
+        assertThrows(com.pdf.pdfapi.exception.PdfErrorException.class,
+                () -> pdfController.fillForm(file, "{\"name\":\"John\"}", true));
+
+        verify(validator, times(1)).validatePdfFile(file);
+    }
+
+    @Test
     void testOcrText() {
         MultipartFile file = mock(MultipartFile.class);
         byte[] textBytes = "Hello World".getBytes();
 
-        when(pdfService.ocrToText(file, "eng", null, null)).thenReturn(textBytes);
+        when(pdfService.ocrToText(file, "eng", null, null, null)).thenReturn(textBytes);
 
         pdfController.ocr(file, "eng", "text", null, null, null);
 
         verify(validator, times(1)).validatePdfFile(file);
-        verify(pdfService, times(1)).ocrToText(file, "eng", null, null);
+        verify(pdfService, times(1)).ocrToText(file, "eng", null, null, null);
     }
 
     @Test

@@ -2,11 +2,11 @@
 
 A production-ready Spring Boot API for working with PDF files. Built with security, scalability, and best practices in mind.
 
-Based on [iText library][itext] | Java 21 | Spring Boot 3.5.6
+Based on [iText library][itext] | Java 21 | Spring Boot 4.0.2
 
 ## Features
 
-- ✅ **13 PDF Operations**: Merge, Split, Extract, Remove pages, Image to PDF conversion, Rotate, Info, Metadata, Page Numbers, Watermark, Compress, Encrypt/Decrypt, Optimize
+- ✅ **20 API Endpoints**: Merge, Split, Extract, Remove pages, Image to PDF conversion, Rotate, Info, Metadata (get/update), Page Numbers, Watermark, Compress, Encrypt, Decrypt, Optimize, PDF to Images, Extract Images, Crop, OCR, Fill Form
 - 🔐 **Secure**: HTTP Basic Auth, BCrypt passwords, CORS, Security headers, PDF encryption
 - 🛡️ **Rate Limited**: Protection against abuse (3-10 requests/minute)
 - ✅ **Validated**: Input validation for file types, sizes, and parameters

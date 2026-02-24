@@ -5,8 +5,8 @@ import com.itextpdf.kernel.pdf.PdfReader;
 import com.itextpdf.kernel.pdf.canvas.parser.PdfTextExtractor;
 import com.pdf.pdfapi.dto.*;
 import com.pdf.pdfapi.exception.PdfErrorException;
+import com.pdf.pdfapi.service.ocr.PdfOcrService;
 import lombok.SneakyThrows;
-import net.sourceforge.tess4j.ITesseract;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -14,22 +14,19 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
 class PdfServiceTest {
 
     @Mock
-    private TesseractFactory tesseractFactory;
+    private PdfOcrService pdfOcrService;
 
     @InjectMocks
     private PdfService pdfService;
@@ -140,6 +137,22 @@ class PdfServiceTest {
         assertEquals(1, result.pageCount()); // Original had 2 pages, removed 1
 
         // Verify content
+        String expectedText = pdfToText("src/test/resources/remove/removedPages.pdf");
+        String actualText = pdfToText(result.content());
+        assertEquals(expectedText, actualText);
+    }
+
+    @Test
+    @SneakyThrows
+    void removeGivenDuplicateAndUnsortedPagesExpectNormalizedRemoval() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
+
+        PdfResult result = pdfService.remove(originalFile, 2, 2);
+
+        assertNotNull(result);
+        assertEquals(1, result.pageCount());
+
         String expectedText = pdfToText("src/test/resources/remove/removedPages.pdf");
         String actualText = pdfToText(result.content());
         assertEquals(expectedText, actualText);
@@ -669,56 +682,48 @@ class PdfServiceTest {
 
     @Test
     @SneakyThrows
-    void ocrToTextGivenValidPdfExpectTextExtracted() {
+    void ocrToTextDelegatesToPdfOcrService() {
         MultipartFile file = mock(MultipartFile.class);
-        ITesseract mockTesseract = mock(ITesseract.class);
+        byte[] response = "Hello World".getBytes();
 
-        when(file.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/merge/file1.pdf")));
-        when(tesseractFactory.create("eng")).thenReturn(mockTesseract);
-        when(mockTesseract.doOCR(any(BufferedImage.class))).thenReturn("Hello World");
+        when(pdfOcrService.ocrToText(file, "eng", null, null)).thenReturn(response);
 
         byte[] result = pdfService.ocrToText(file, "eng", null, null);
 
-        assertNotNull(result);
-        String text = new String(result, StandardCharsets.UTF_8);
-        assertTrue(text.contains("Hello World"));
-        assertTrue(text.contains("--- Page 1 ---"));
-        verify(tesseractFactory).create("eng");
-        verify(mockTesseract).doOCR(any(BufferedImage.class));
+        assertArrayEquals(response, result);
+        verify(pdfOcrService).ocrToText(file, "eng", null, null);
     }
 
     @Test
     @SneakyThrows
-    void ocrToPdfGivenValidPdfExpectSearchablePdf() {
+    void ocrToPdfDelegatesToPdfOcrService() {
         MultipartFile file = mock(MultipartFile.class);
-        ITesseract mockTesseract = mock(ITesseract.class);
+        PdfResult expected = PdfResult.builder()
+                .content(new byte[]{1, 2})
+                .suggestedFileName("ocr_test.pdf")
+                .sizeInBytes(2)
+                .pageCount(1)
+                .build();
 
-        when(file.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/merge/file1.pdf")));
-        when(tesseractFactory.create("eng")).thenReturn(mockTesseract);
-        when(mockTesseract.doOCR(any(BufferedImage.class))).thenReturn("Hello World");
+        when(pdfOcrService.ocrToPdf(file, "eng", null, null, null)).thenReturn(expected);
 
         PdfResult result = pdfService.ocrToPdf(file, "eng", null, null, null);
 
-        assertNotNull(result);
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertTrue(result.suggestedFileName().contains("ocr"));
-        assertEquals(1, result.pageCount());
-        verify(tesseractFactory).create("eng");
+        assertEquals(expected, result);
+        verify(pdfOcrService).ocrToPdf(file, "eng", null, null, null);
     }
 
     @Test
     @SneakyThrows
-    void ocrToTextGivenNullLanguageExpectsDefaultLanguage() {
+    void ocrToTextWithDpiDelegatesToPdfOcrService() {
         MultipartFile file = mock(MultipartFile.class);
-        ITesseract mockTesseract = mock(ITesseract.class);
+        byte[] response = "text".getBytes();
 
-        when(file.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/merge/file1.pdf")));
-        when(tesseractFactory.create("eng")).thenReturn(mockTesseract);
-        when(mockTesseract.doOCR(any(BufferedImage.class))).thenReturn("text");
+        when(pdfOcrService.ocrToText(file, null, 1, 2, 200)).thenReturn(response);
 
-        pdfService.ocrToText(file, null, null, null);
+        byte[] result = pdfService.ocrToText(file, null, 1, 2, 200);
 
-        verify(tesseractFactory).create("eng");
+        assertArrayEquals(response, result);
+        verify(pdfOcrService).ocrToText(file, null, 1, 2, 200);
     }
 }

@@ -28,10 +28,9 @@ import com.pdf.pdfapi.dto.PdfMetadataResponse;
 import com.pdf.pdfapi.dto.PdfResult;
 import com.pdf.pdfapi.dto.WatermarkRequest;
 import com.pdf.pdfapi.exception.PdfErrorException;
+import com.pdf.pdfapi.service.ocr.PdfOcrService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import net.sourceforge.tess4j.ITesseract;
-import net.sourceforge.tess4j.TesseractException;
 import org.apache.pdfbox.Loader;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
@@ -51,6 +50,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.zip.ZipEntry;
@@ -61,7 +61,7 @@ import java.util.zip.ZipOutputStream;
 @Log4j2
 public class PdfService {
 
-    private final TesseractFactory tesseractFactory;
+    private final PdfOcrService pdfOcrService;
 
     private static final String LOW_COMPRESSION_LEVEL = "LOW";
     private static final String MEDIUM_COMPRESSION_LEVEL = "MEDIUM";
@@ -234,17 +234,20 @@ public class PdfService {
 
             int totalPages = pdfDocument.getNumberOfPages();
             validatePageNumbers(page, totalPages, pdfDocument);
+            List<Integer> pagesToRemove = Arrays.stream(page)
+                    .distinct()
+                    .sorted((a, b) -> Integer.compare(b, a))
+                    .toList();
 
-            int removeCount = 0;
-            for (Integer pageNumber : page) {
-                pdfDocument.removePage(pageNumber - removeCount++);
+            for (Integer pageNumber : pagesToRemove) {
+                pdfDocument.removePage(pageNumber);
             }
 
             int finalPageCount = pdfDocument.getNumberOfPages();
             pdfDocument.close();
 
             byte[] pdfBytes = outputStream.toByteArray();
-            log.info("Successfully removed {} pages ({} pages remaining, {} bytes)", page.length, finalPageCount, pdfBytes.length);
+            log.info("Successfully removed {} pages ({} pages remaining, {} bytes)", pagesToRemove.size(), finalPageCount, pdfBytes.length);
             return buildPdfResult(pdfBytes, "removedPages", finalPageCount);
 
         } catch (PdfErrorException e) {
@@ -1251,113 +1254,15 @@ public class PdfService {
     }
 
     public byte[] ocrToText(MultipartFile file, String language, Integer startPage, Integer endPage) {
-        String lang = resolveLanguage(language);
-        try {
-            PDDocument document = loadPdfBoxDocument(file);
-            int totalPages = document.getNumberOfPages();
-            PageBounds bounds = resolvePageRange(startPage, endPage, totalPages);
-            int start = bounds.start() - 1;
-            int end = bounds.end() - 1;
+        return pdfOcrService.ocrToText(file, language, startPage, endPage);
+    }
 
-            PDFRenderer renderer = new PDFRenderer(document);
-            ITesseract tesseract = tesseractFactory.create(lang);
-            StringBuilder text = new StringBuilder();
-
-            for (int i = start; i <= end; i++) {
-                BufferedImage image = renderer.renderImageWithDPI(i, 300, ImageType.RGB);
-                String pageText = performOcr(tesseract, image, i + 1);
-                text.append("--- Page ").append(i + 1).append(" ---\n");
-                text.append(pageText).append("\n\n");
-            }
-
-            document.close();
-            log.info("Successfully performed OCR text extraction on {} pages", end - start + 1);
-            return text.toString().getBytes(StandardCharsets.UTF_8);
-
-        } catch (PdfErrorException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to perform OCR text extraction", e);
-            throw new PdfErrorException("Failed to perform OCR: " + e.getMessage(), e);
-        }
+    public byte[] ocrToText(MultipartFile file, String language, Integer startPage, Integer endPage, Integer dpi) {
+        return pdfOcrService.ocrToText(file, language, startPage, endPage, dpi);
     }
 
     public PdfResult ocrToPdf(MultipartFile file, String language, Integer startPage, Integer endPage, Integer dpi) {
-        String lang = resolveLanguage(language);
-        int resolvedDpi = (dpi != null && dpi > 0) ? dpi : 300;
-        try {
-            PDDocument document = loadPdfBoxDocument(file);
-            int totalPages = document.getNumberOfPages();
-            PageBounds bounds = resolvePageRange(startPage, endPage, totalPages);
-            int start = bounds.start() - 1;
-            int end = bounds.end() - 1;
-
-            PDFRenderer renderer = new PDFRenderer(document);
-            ITesseract tesseract = tesseractFactory.create(lang);
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            PdfDocument resultPdf = new PdfDocument(new PdfWriter(outputStream));
-            PdfFont font = PdfFontFactory.createFont();
-
-            for (int i = start; i <= end; i++) {
-                BufferedImage image = renderer.renderImageWithDPI(i, resolvedDpi, ImageType.RGB);
-                String pageText = performOcr(tesseract, image, i + 1);
-
-                PDRectangle mediaBox = document.getPage(i).getMediaBox();
-                float pageWidth = mediaBox.getWidth();
-                float pageHeight = mediaBox.getHeight();
-
-                PdfPage pdfPage = resultPdf.addNewPage(new PageSize(pageWidth, pageHeight));
-                PdfCanvas canvas = new PdfCanvas(pdfPage);
-
-                ByteArrayOutputStream imgBaos = new ByteArrayOutputStream();
-                ImageIO.write(image, "png", imgBaos);
-                ImageData imageData = ImageDataFactory.create(imgBaos.toByteArray());
-                canvas.addImageWithTransformationMatrix(imageData, pageWidth, 0, 0, pageHeight, 0, 0);
-
-                String cleanText = pageText.replace("\n", " ").replace("\r", " ").trim();
-                if (!cleanText.isEmpty()) {
-                    try {
-                        canvas.beginText()
-                              .setFontAndSize(font, 1)
-                              .setTextRenderingMode(3)
-                              .moveText(0, pageHeight / 2)
-                              .showText(cleanText)
-                              .endText();
-                    } catch (Exception e) {
-                        log.warn("Could not add invisible text layer for page {}", i + 1);
-                    }
-                }
-            }
-
-            resultPdf.close();
-            document.close();
-
-            byte[] resultBytes = outputStream.toByteArray();
-            log.info("Successfully created searchable PDF with {} pages ({} bytes)", end - start + 1, resultBytes.length);
-            return buildPdfResult(resultBytes, "ocr", end - start + 1);
-
-        } catch (PdfErrorException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to create searchable PDF", e);
-            throw new PdfErrorException("Failed to create searchable PDF: " + e.getMessage(), e);
-        }
-    }
-
-    private String performOcr(ITesseract tesseract, BufferedImage image, int pageNumber) {
-        try {
-            return tesseract.doOCR(image);
-        } catch (UnsatisfiedLinkError e) {
-            log.error("Tesseract native library not found", e);
-            throw new PdfErrorException("Tesseract OCR is not available. Please install Tesseract on the system.");
-        } catch (TesseractException e) {
-            log.error("OCR failed on page {}", pageNumber, e);
-            throw new PdfErrorException("OCR failed on page " + pageNumber + ": " + e.getMessage(), e);
-        }
-    }
-
-    private String resolveLanguage(String language) {
-        return (language != null && !language.isBlank()) ? language : "eng";
+        return pdfOcrService.ocrToPdf(file, language, startPage, endPage, dpi);
     }
 
     private PdfReader toPdfReader(MultipartFile file) throws IOException {
