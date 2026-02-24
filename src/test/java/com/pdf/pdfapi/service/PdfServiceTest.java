@@ -5,6 +5,7 @@ import com.itextpdf.kernel.pdf.PdfReader;
 import com.itextpdf.kernel.pdf.canvas.parser.PdfTextExtractor;
 import com.pdf.pdfapi.dto.*;
 import com.pdf.pdfapi.exception.PdfErrorException;
+import com.pdf.pdfapi.service.core.PdfDocumentOpsService;
 import com.pdf.pdfapi.service.core.PdfOptimizationService;
 import com.pdf.pdfapi.service.form.PdfFormService;
 import com.pdf.pdfapi.service.image.PdfImageService;
@@ -49,134 +50,74 @@ class PdfServiceTest {
     @Mock
     private PdfOptimizationService pdfOptimizationService;
 
+    @Mock
+    private PdfDocumentOpsService pdfDocumentOpsService;
+
     @InjectMocks
     private PdfService pdfService;
 
     @Test
-    void mergeGivenThereIsOnlyOneFileExpectFailure() {
+    void mergeDelegatesToPdfDocumentOpsService() {
         MultipartFile file = mock(MultipartFile.class);
-        MultipartFile[] files = new MultipartFile[1];
-        files[0] = file;
+        MultipartFile[] files = new MultipartFile[]{file};
+        PdfResult expected = PdfResult.builder().content(new byte[]{1}).suggestedFileName("merged.pdf").sizeInBytes(1).pageCount(1).build();
 
-        assertThrows(PdfErrorException.class, () -> pdfService.merge(files));
+        when(pdfDocumentOpsService.merge(files)).thenReturn(expected);
+
+        PdfResult result = pdfService.merge(files);
+
+        assertEquals(expected, result);
+        verify(pdfDocumentOpsService).merge(files);
     }
 
     @Test
-    @SneakyThrows
-    void mergeGivenThereAreTwoFilesExpectOneCombinedFile() {
+    void mergeWithBookmarksDelegatesToPdfDocumentOpsService() {
         MultipartFile file1 = mock(MultipartFile.class);
         MultipartFile file2 = mock(MultipartFile.class);
+        PdfResult expected = PdfResult.builder().content(new byte[]{1}).suggestedFileName("merged.pdf").sizeInBytes(1).pageCount(2).build();
 
-        byte[] pdf1Bytes = Files.readAllBytes(Path.of("src/test/resources/merge/file1.pdf"));
-        byte[] pdf2Bytes = Files.readAllBytes(Path.of("src/test/resources/merge/file2.pdf"));
+        when(pdfDocumentOpsService.merge(true, file1, file2)).thenReturn(expected);
 
-        when(file1.getBytes()).thenReturn(pdf1Bytes);
-        when(file2.getBytes()).thenReturn(pdf2Bytes);
+        PdfResult result = pdfService.merge(true, file1, file2);
 
-        PdfResult result = pdfService.merge(file1, file2);
-
-        // Verify result is not null and has content
-        assertNotNull(result);
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertTrue(result.suggestedFileName().contains("merged"));
-        assertEquals(2, result.pageCount()); // 1 page from each file
-
-        // Verify PDF content by comparing text
-        String expectedText = pdfToText("src/test/resources/merge/merged_file.pdf");
-        String actualText = pdfToText(result.content());
-        assertEquals(expectedText, actualText);
+        assertEquals(expected, result);
+        verify(pdfDocumentOpsService).merge(true, file1, file2);
     }
 
     @Test
-    @SneakyThrows
-    void splitGivenOneFileExpectMultipleFiles() {
+    void splitDelegatesToPdfDocumentOpsService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/split/original_file.pdf")));
-
-        List<PdfResult> results = pdfService.split(originalFile, 1);
-
-        // Verify we got 2 split files
-        assertNotNull(results);
-        assertEquals(2, results.size());
-
-        // Verify each result
-        for (PdfResult result : results) {
-            assertNotNull(result.content());
-            assertTrue(result.content().length > 0);
-            assertTrue(result.suggestedFileName().contains("splitDocument"));
-            assertEquals(1, result.pageCount()); // Split by 1 page each
-        }
-
-        // Compare with expected files
-        String expected1 = pdfToText("src/test/resources/split/splitDocument_1.pdf");
-        String actual1 = pdfToText(results.getFirst().content());
-        assertEquals(expected1, actual1);
-
-        String expected2 = pdfToText("src/test/resources/split/splitDocument_2.pdf");
-        String actual2 = pdfToText(results.get(1).content());
-        assertEquals(expected2, actual2);
+        List<PdfResult> expected = List.of(PdfResult.builder().content(new byte[]{1}).suggestedFileName("s1.pdf").sizeInBytes(1).pageCount(1).build());
+        when(pdfDocumentOpsService.split(originalFile, 1)).thenReturn(expected);
+        assertEquals(expected, pdfService.split(originalFile, 1));
+        verify(pdfDocumentOpsService).split(originalFile, 1);
     }
 
     @Test
-    @SneakyThrows
-    void extractGivenOneFileExpectNewFile() {
+    void extractDelegatesToPdfDocumentOpsService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
-
-        PdfResult result = pdfService.extract(originalFile, 2, 2);
-
-        // Verify result
-        assertNotNull(result);
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertTrue(result.suggestedFileName().contains("extracted"));
-        assertEquals(1, result.pageCount()); // Pages 2-2 = 1 page
-
-        // Verify content
-        String expectedText = pdfToText("src/test/resources/extract/extractedPages.pdf");
-        String actualText = pdfToText(result.content());
-        assertEquals(expectedText, actualText);
+        PdfResult expected = PdfResult.builder().content(new byte[]{1}).suggestedFileName("e.pdf").sizeInBytes(1).pageCount(1).build();
+        when(pdfDocumentOpsService.extract(originalFile, 2, 2)).thenReturn(expected);
+        assertEquals(expected, pdfService.extract(originalFile, 2, 2));
+        verify(pdfDocumentOpsService).extract(originalFile, 2, 2);
     }
 
     @Test
-    @SneakyThrows
-    void removeGivenOneFileExpectNewFile() {
+    void removeDelegatesToPdfDocumentOpsService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
-
-        PdfResult result = pdfService.remove(originalFile, 2);
-
-        // Verify result
-        assertNotNull(result);
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertTrue(result.suggestedFileName().contains("removed"));
-        assertEquals(1, result.pageCount()); // Original had 2 pages, removed 1
-
-        // Verify content
-        String expectedText = pdfToText("src/test/resources/remove/removedPages.pdf");
-        String actualText = pdfToText(result.content());
-        assertEquals(expectedText, actualText);
+        PdfResult expected = PdfResult.builder().content(new byte[]{1}).suggestedFileName("r.pdf").sizeInBytes(1).pageCount(1).build();
+        when(pdfDocumentOpsService.remove(originalFile, 2)).thenReturn(expected);
+        assertEquals(expected, pdfService.remove(originalFile, 2));
+        verify(pdfDocumentOpsService).remove(originalFile, 2);
     }
 
     @Test
-    @SneakyThrows
-    void removeGivenDuplicateAndUnsortedPagesExpectNormalizedRemoval() {
+    void removeWithDuplicatePagesDelegatesToPdfDocumentOpsService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
-
-        PdfResult result = pdfService.remove(originalFile, 2, 2);
-
-        assertNotNull(result);
-        assertEquals(1, result.pageCount());
-
-        String expectedText = pdfToText("src/test/resources/remove/removedPages.pdf");
-        String actualText = pdfToText(result.content());
-        assertEquals(expectedText, actualText);
+        PdfResult expected = PdfResult.builder().content(new byte[]{1}).suggestedFileName("r.pdf").sizeInBytes(1).pageCount(1).build();
+        when(pdfDocumentOpsService.remove(originalFile, 2, 2)).thenReturn(expected);
+        assertEquals(expected, pdfService.remove(originalFile, 2, 2));
+        verify(pdfDocumentOpsService).remove(originalFile, 2, 2);
     }
 
     @Test
@@ -227,61 +168,37 @@ class PdfServiceTest {
     }
 
     @Test
-    @SneakyThrows
-    void rotateGivenValidRotationExpectRotatedPdf() {
+    void rotateDelegatesToPdfDocumentOpsService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
-
-        PdfResult result = pdfService.rotate(originalFile, 90);
-
-        // Verify result
-        assertNotNull(result);
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertTrue(result.suggestedFileName().contains("rotated"));
-        assertEquals(2, result.pageCount());
-
-        // Verify rotation was applied
-        try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
-            assertEquals(90, document.getPage(1).getRotation());
-            assertEquals(90, document.getPage(2).getRotation());
-        }
+        PdfResult expected = PdfResult.builder().content(new byte[]{1}).suggestedFileName("rot.pdf").sizeInBytes(1).pageCount(2).build();
+        when(pdfDocumentOpsService.rotate(originalFile, 90)).thenReturn(expected);
+        assertEquals(expected, pdfService.rotate(originalFile, 90));
+        verify(pdfDocumentOpsService).rotate(originalFile, 90);
     }
 
     @Test
-    @SneakyThrows
-    void rotateGivenSpecificPagesExpectOnlyThosePagesRotated() {
+    void rotateSpecificPagesDelegatesToPdfDocumentOpsService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
-
-        PdfResult result = pdfService.rotate(originalFile, 180, 1);
-
-        // Verify result
-        assertNotNull(result);
-        assertEquals(2, result.pageCount());
-
-        // Verify only page 1 was rotated
-        try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
-            assertEquals(180, document.getPage(1).getRotation());
-            assertEquals(0, document.getPage(2).getRotation());
-        }
+        PdfResult expected = PdfResult.builder().content(new byte[]{1}).suggestedFileName("rot.pdf").sizeInBytes(1).pageCount(2).build();
+        when(pdfDocumentOpsService.rotate(originalFile, 180, 1)).thenReturn(expected);
+        assertEquals(expected, pdfService.rotate(originalFile, 180, 1));
+        verify(pdfDocumentOpsService).rotate(originalFile, 180, 1);
     }
 
     @Test
-    @SneakyThrows
-    void rotateGivenInvalidRotationExpectFailure() {
+    void rotateInvalidDelegatesToPdfDocumentOpsService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-
-        // Rotation must be multiple of 90
+        when(pdfDocumentOpsService.rotate(originalFile, 45)).thenThrow(new PdfErrorException("Rotation must be a multiple of 90 degrees"));
         assertThrows(PdfErrorException.class, () -> pdfService.rotate(originalFile, 45));
+        verify(pdfDocumentOpsService).rotate(originalFile, 45);
     }
 
     @Test
-    @SneakyThrows
-    void rotateGivenNullRotationExpectFailure() {
+    void rotateNullDelegatesToPdfDocumentOpsService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-
+        when(pdfDocumentOpsService.rotate(originalFile, null)).thenThrow(new PdfErrorException("Rotation angle is required"));
         assertThrows(PdfErrorException.class, () -> pdfService.rotate(originalFile, null));
+        verify(pdfDocumentOpsService).rotate(originalFile, null);
     }
 
     @Test
@@ -580,6 +497,19 @@ class PdfServiceTest {
 
         assertArrayEquals(expected, result);
         verify(pdfImageService).extractImages(file, 100, 200);
+    }
+
+    @Test
+    void cropDelegatesToPdfDocumentOpsService() {
+        MultipartFile file = mock(MultipartFile.class);
+        PdfResult expected = PdfResult.builder().content(new byte[]{1}).suggestedFileName("crop.pdf").sizeInBytes(1).pageCount(1).build();
+
+        when(pdfDocumentOpsService.crop(file, 0f, 0f, 100f, 100f, null, null)).thenReturn(expected);
+
+        PdfResult result = pdfService.crop(file, 0f, 0f, 100f, 100f, null, null);
+
+        assertEquals(expected, result);
+        verify(pdfDocumentOpsService).crop(file, 0f, 0f, 100f, 100f, null, null);
     }
 
     @Test
