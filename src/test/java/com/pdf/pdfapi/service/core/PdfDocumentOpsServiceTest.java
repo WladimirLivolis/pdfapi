@@ -118,6 +118,16 @@ class PdfDocumentOpsServiceTest {
     }
 
     @Test
+    void extractGivenStartPageGreaterThanEndPageExpectFailure() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+
+        PdfErrorException ex = assertThrows(PdfErrorException.class,
+                () -> pdfDocumentOpsService.extract(originalFile, 2, 1));
+
+        assertTrue(ex.getMessage().contains("startPage must be less than or equal to endPage"));
+    }
+
+    @Test
     @SneakyThrows
     void removeGivenOneFileExpectNewFile() {
         MultipartFile originalFile = mock(MultipartFile.class);
@@ -218,6 +228,18 @@ class PdfDocumentOpsServiceTest {
         try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
             assertEquals(2, document.getNumberOfPages());
         }
+    }
+
+    @Test
+    @SneakyThrows
+    void cropGivenInvalidPageRangeExpectFailure() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
+
+        PdfErrorException ex = assertThrows(PdfErrorException.class,
+                () -> pdfDocumentOpsService.crop(originalFile, 0f, 0f, 500f, 700f, 2, 1));
+
+        assertTrue(ex.getMessage().contains("startPage must be less than or equal to endPage"));
     }
 
     @SneakyThrows

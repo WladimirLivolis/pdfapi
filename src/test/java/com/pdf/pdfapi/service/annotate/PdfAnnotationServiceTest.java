@@ -153,4 +153,25 @@ class PdfAnnotationServiceTest {
                 () -> pdfAnnotationService.watermark(originalFile, imageFile, WatermarkRequest.builder()
                         .text("TEST").position("center").opacity(0.3f).rotation(45.0f).scale(1.0f).layer("foreground").build()));
     }
+
+    @Test
+    @SneakyThrows
+    void watermarkGivenInvalidPositionAndLayerUsesFallbackSemantics() {
+        MultipartFile originalFile = mock(MultipartFile.class);
+        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
+
+        PdfResult result = pdfAnnotationService.watermark(originalFile, null, WatermarkRequest.builder()
+                .text("TEST")
+                .position("not-a-position")
+                .opacity(0.3f)
+                .rotation(0.0f)
+                .scale(1.0f)
+                .layer("not-a-layer")
+                .build());
+
+        assertNotNull(result);
+        assertNotNull(result.content());
+        assertTrue(result.content().length > 0);
+        assertEquals(2, result.pageCount());
+    }
 }

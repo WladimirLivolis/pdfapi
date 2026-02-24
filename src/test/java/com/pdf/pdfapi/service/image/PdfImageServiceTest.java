@@ -100,4 +100,20 @@ class PdfImageServiceTest {
             assertTrue(entry.getName().startsWith("image_page"));
         }
     }
+
+    @Test
+    @SneakyThrows
+    void extractImagesGivenPdfWithoutImagesExpectEmptyZip() {
+        byte[] pdfBytes = Files.readAllBytes(Path.of("src/test/resources/merge/file1.pdf"));
+        MultipartFile file = new MockMultipartFile("file", "file1.pdf", "application/pdf", pdfBytes);
+
+        byte[] zipBytes = pdfImageService.extractImages(file, null, null);
+
+        assertNotNull(zipBytes);
+        assertTrue(zipBytes.length > 0);
+
+        try (ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(zipBytes))) {
+            assertNull(zis.getNextEntry());
+        }
+    }
 }
