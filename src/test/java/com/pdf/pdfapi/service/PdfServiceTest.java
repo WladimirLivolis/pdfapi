@@ -7,6 +7,7 @@ import com.pdf.pdfapi.dto.*;
 import com.pdf.pdfapi.exception.PdfErrorException;
 import com.pdf.pdfapi.service.form.PdfFormService;
 import com.pdf.pdfapi.service.image.PdfImageService;
+import com.pdf.pdfapi.service.metadata.PdfMetadataService;
 import com.pdf.pdfapi.service.ocr.PdfOcrService;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
@@ -36,6 +37,9 @@ class PdfServiceTest {
 
     @Mock
     private PdfFormService pdfFormService;
+
+    @Mock
+    private PdfMetadataService pdfMetadataService;
 
     @InjectMocks
     private PdfService pdfService;
@@ -273,52 +277,40 @@ class PdfServiceTest {
     }
 
     @Test
-    @SneakyThrows
-    void getInfoGivenValidPdfExpectCorrectInfo() {
+    void getInfoDelegatesToPdfMetadataService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-        byte[] pdfBytes = Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf"));
-        when(originalFile.getBytes()).thenReturn(pdfBytes);
-        when(originalFile.getSize()).thenReturn((long) pdfBytes.length);
+        PdfInfoResponse expected = PdfInfoResponse.success(
+                1, 100L, "PDF-1.7",
+                PdfInfoResponse.PageDimensions.builder().width(100f).height(100f).unit("points").build(),
+                true
+        );
+
+        when(pdfMetadataService.getInfo(originalFile)).thenReturn(expected);
 
         PdfInfoResponse response = pdfService.getInfo(originalFile);
 
-        // Verify response
-        assertNotNull(response);
-        assertEquals("success", response.status());
-        assertEquals(2, response.pageCount());
-        assertEquals((long) pdfBytes.length, response.fileSizeBytes());
-        assertNotNull(response.pdfVersion());
-        assertNotNull(response.firstPageDimensions());
-        assertNotNull(response.firstPageDimensions().width());
-        assertNotNull(response.firstPageDimensions().height());
-        assertEquals("points", response.firstPageDimensions().unit());
-        assertNotNull(response.allPagesSameDimension());
+        assertEquals(expected, response);
+        verify(pdfMetadataService).getInfo(originalFile);
     }
 
     @Test
-    @SneakyThrows
-    void getMetadataGivenValidPdfExpectMetadata() {
+    void getMetadataDelegatesToPdfMetadataService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
+        PdfMetadataResponse expected = PdfMetadataResponse.success(
+                "t", "a", "s", "k", "c", "p", "cd", "md"
+        );
+
+        when(pdfMetadataService.getMetadata(originalFile)).thenReturn(expected);
 
         PdfMetadataResponse response = pdfService.getMetadata(originalFile);
 
-        // Verify response structure
-        assertNotNull(response);
-        assertEquals("success", response.status());
-        assertEquals("PDF metadata retrieved successfully", response.message());
-        assertNotNull(response.timestamp());
-        // Note: The actual values depend on the test PDF file's metadata
-        // We're just verifying the method doesn't crash and returns a proper response
+        assertEquals(expected, response);
+        verify(pdfMetadataService).getMetadata(originalFile);
     }
 
     @Test
-    @SneakyThrows
-    void updateMetadataGivenValidMetadataExpectUpdatedPdf() {
+    void updateMetadataDelegatesToPdfMetadataService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-        // Use merge/file1.pdf which has simpler/no metadata
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/merge/file1.pdf")));
-
         PdfMetadataRequest metadata = PdfMetadataRequest.builder()
                 .title("Test Title")
                 .author("Test Author")
@@ -326,59 +318,19 @@ class PdfServiceTest {
                 .keywords("Test Keywords")
                 .creator("Test Creator")
                 .build();
-
-        PdfResult result = pdfService.updateMetadata(originalFile, metadata);
-
-        // Verify result
-        assertNotNull(result);
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertTrue(result.suggestedFileName().contains("metadata_updated"));
-        assertEquals(1, result.pageCount());
-
-        // Verify metadata was updated
-        try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
-            assertEquals("Test Title", document.getDocumentInfo().getTitle());
-            // iText may append author to existing authors, so we check contains
-            assertTrue(document.getDocumentInfo().getAuthor().contains("Test Author"));
-            assertEquals("Test Subject", document.getDocumentInfo().getSubject());
-            assertEquals("Test Keywords", document.getDocumentInfo().getKeywords());
-            assertEquals("Test Creator", document.getDocumentInfo().getCreator());
-        }
-    }
-
-    @Test
-    @SneakyThrows
-    void updateMetadataGivenPartialMetadataExpectOnlyProvidedFieldsUpdated() {
-        MultipartFile originalFile = mock(MultipartFile.class);
-        // Use merge/file1.pdf which has simpler/no metadata
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/merge/file1.pdf")));
-
-        // Only update title and subject
-        PdfMetadataRequest metadata = PdfMetadataRequest.builder()
-                .title("New Title Only")
-                .subject("New Subject Only")
+        PdfResult expected = PdfResult.builder()
+                .content(new byte[]{1})
+                .suggestedFileName("metadata_updated_x.pdf")
+                .sizeInBytes(1)
+                .pageCount(1)
                 .build();
 
+        when(pdfMetadataService.updateMetadata(originalFile, metadata)).thenReturn(expected);
+
         PdfResult result = pdfService.updateMetadata(originalFile, metadata);
 
-        // Verify result
-        assertNotNull(result);
-        assertEquals(1, result.pageCount());
-
-        // Verify specified metadata was updated
-        try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
-            assertEquals("New Title Only", document.getDocumentInfo().getTitle());
-            assertEquals("New Subject Only", document.getDocumentInfo().getSubject());
-        }
-    }
-
-    @Test
-    @SneakyThrows
-    void updateMetadataGivenNullMetadataExpectFailure() {
-        MultipartFile originalFile = mock(MultipartFile.class);
-
-        assertThrows(PdfErrorException.class, () -> pdfService.updateMetadata(originalFile, null));
+        assertEquals(expected, result);
+        verify(pdfMetadataService).updateMetadata(originalFile, metadata);
     }
 
     @Test
