@@ -5,6 +5,7 @@ import com.itextpdf.kernel.pdf.PdfReader;
 import com.itextpdf.kernel.pdf.canvas.parser.PdfTextExtractor;
 import com.pdf.pdfapi.dto.*;
 import com.pdf.pdfapi.exception.PdfErrorException;
+import com.pdf.pdfapi.service.annotate.PdfAnnotationService;
 import com.pdf.pdfapi.service.core.PdfDocumentOpsService;
 import com.pdf.pdfapi.service.core.PdfOptimizationService;
 import com.pdf.pdfapi.service.form.PdfFormService;
@@ -52,6 +53,9 @@ class PdfServiceTest {
 
     @Mock
     private PdfDocumentOpsService pdfDocumentOpsService;
+
+    @Mock
+    private PdfAnnotationService pdfAnnotationService;
 
     @InjectMocks
     private PdfService pdfService;
@@ -259,134 +263,82 @@ class PdfServiceTest {
     }
 
     @Test
-    @SneakyThrows
-    void addPageNumbersGivenValidParametersExpectNumberedPdf() {
+    void addPageNumbersDelegatesToPdfAnnotationService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
+        PdfResult expected = PdfResult.builder().content(new byte[]{1}).suggestedFileName("numbered.pdf").sizeInBytes(1).pageCount(2).build();
+        when(pdfAnnotationService.addPageNumbers(originalFile, "bottom-center", "Page {current} of {total}", null, null))
+                .thenReturn(expected);
 
         PdfResult result = pdfService.addPageNumbers(originalFile, "bottom-center", "Page {current} of {total}", null, null);
 
-        // Verify result
-        assertNotNull(result);
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertTrue(result.suggestedFileName().contains("numbered"));
-        assertEquals(2, result.pageCount());
-
-        // Verify PDF is valid
-        try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
-            assertEquals(2, document.getNumberOfPages());
-        }
+        assertEquals(expected, result);
+        verify(pdfAnnotationService).addPageNumbers(originalFile, "bottom-center", "Page {current} of {total}", null, null);
     }
 
     @Test
-    @SneakyThrows
-    void addPageNumbersGivenPageRangeExpectOnlyRangeNumbered() {
+    void addPageNumbersWithRangeDelegatesToPdfAnnotationService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
-
-        // Only number page 1
-        PdfResult result = pdfService.addPageNumbers(originalFile, "top-right", "{page}", 1, 1);
-
-        // Verify result
-        assertNotNull(result);
-        assertEquals(2, result.pageCount());
-
-        // Verify PDF is valid
-        try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
-            assertEquals(2, document.getNumberOfPages());
-        }
+        PdfResult expected = PdfResult.builder().content(new byte[]{1}).suggestedFileName("numbered.pdf").sizeInBytes(1).pageCount(2).build();
+        when(pdfAnnotationService.addPageNumbers(originalFile, "top-right", "{page}", 1, 1)).thenReturn(expected);
+        assertEquals(expected, pdfService.addPageNumbers(originalFile, "top-right", "{page}", 1, 1));
+        verify(pdfAnnotationService).addPageNumbers(originalFile, "top-right", "{page}", 1, 1);
     }
 
     @Test
-    @SneakyThrows
-    void addPageNumbersGivenDefaultParametersExpectDefaultFormatting() {
+    void addPageNumbersDefaultsDelegatesToPdfAnnotationService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
-
-        // Use null parameters to test defaults
-        PdfResult result = pdfService.addPageNumbers(originalFile, null, null, null, null);
-
-        // Verify result
-        assertNotNull(result);
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertEquals(2, result.pageCount());
-
-        // Verify PDF is valid
-        try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
-            assertEquals(2, document.getNumberOfPages());
-        }
+        PdfResult expected = PdfResult.builder().content(new byte[]{1}).suggestedFileName("numbered.pdf").sizeInBytes(1).pageCount(2).build();
+        when(pdfAnnotationService.addPageNumbers(originalFile, null, null, null, null)).thenReturn(expected);
+        assertEquals(expected, pdfService.addPageNumbers(originalFile, null, null, null, null));
+        verify(pdfAnnotationService).addPageNumbers(originalFile, null, null, null, null);
     }
 
     @Test
-    @SneakyThrows
-    void watermarkGivenTextExpectWatermarkedPdf() {
+    void watermarkTextDelegatesToPdfAnnotationService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
-
-        PdfResult result = pdfService.watermark(originalFile, null, WatermarkRequest.builder()
+        WatermarkRequest request = WatermarkRequest.builder()
                 .text("CONFIDENTIAL").position("center").opacity(0.3f).rotation(45.0f).scale(1.0f).layer("foreground")
-                .build());
-
-        // Verify result
-        assertNotNull(result);
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertTrue(result.suggestedFileName().contains("watermarked"));
-        assertEquals(2, result.pageCount());
-
-        // Verify PDF is valid
-        try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
-            assertEquals(2, document.getNumberOfPages());
-        }
+                .build();
+        PdfResult expected = PdfResult.builder().content(new byte[]{1}).suggestedFileName("watermarked.pdf").sizeInBytes(1).pageCount(2).build();
+        when(pdfAnnotationService.watermark(originalFile, null, request)).thenReturn(expected);
+        assertEquals(expected, pdfService.watermark(originalFile, null, request));
+        verify(pdfAnnotationService).watermark(originalFile, null, request);
     }
 
     @Test
-    @SneakyThrows
-    void watermarkGivenImageExpectWatermarkedPdf() {
+    void watermarkImageDelegatesToPdfAnnotationService() {
         MultipartFile originalFile = mock(MultipartFile.class);
         MultipartFile imageFile = mock(MultipartFile.class);
-
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
-        when(imageFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/image/image.png")));
-
-        PdfResult result = pdfService.watermark(originalFile, imageFile, WatermarkRequest.builder()
+        WatermarkRequest request = WatermarkRequest.builder()
                 .position("top-right").opacity(0.5f).rotation(0.0f).scale(0.5f).layer("background")
-                .build());
-
-        // Verify result
-        assertNotNull(result);
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertTrue(result.suggestedFileName().contains("watermarked"));
-        assertEquals(2, result.pageCount());
-
-        // Verify PDF is valid
-        try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
-            assertEquals(2, document.getNumberOfPages());
-        }
+                .build();
+        PdfResult expected = PdfResult.builder().content(new byte[]{1}).suggestedFileName("watermarked.pdf").sizeInBytes(1).pageCount(2).build();
+        when(pdfAnnotationService.watermark(originalFile, imageFile, request)).thenReturn(expected);
+        assertEquals(expected, pdfService.watermark(originalFile, imageFile, request));
+        verify(pdfAnnotationService).watermark(originalFile, imageFile, request);
     }
 
     @Test
-    @SneakyThrows
-    void watermarkGivenNoTextAndNoImageExpectFailure() {
+    void watermarkNoTextOrImageDelegatesToPdfAnnotationService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-
-        assertThrows(PdfErrorException.class,
-                () -> pdfService.watermark(originalFile, null, WatermarkRequest.builder()
-                        .position("center").opacity(0.3f).rotation(45.0f).scale(1.0f).layer("foreground").build()));
+        WatermarkRequest request = WatermarkRequest.builder()
+                .position("center").opacity(0.3f).rotation(45.0f).scale(1.0f).layer("foreground").build();
+        when(pdfAnnotationService.watermark(originalFile, null, request))
+                .thenThrow(new PdfErrorException("Either text or image must be provided for watermark"));
+        assertThrows(PdfErrorException.class, () -> pdfService.watermark(originalFile, null, request));
+        verify(pdfAnnotationService).watermark(originalFile, null, request);
     }
 
     @Test
-    @SneakyThrows
-    void watermarkGivenBothTextAndImageExpectFailure() {
+    void watermarkBothTextAndImageDelegatesToPdfAnnotationService() {
         MultipartFile originalFile = mock(MultipartFile.class);
         MultipartFile imageFile = mock(MultipartFile.class);
-
-        assertThrows(PdfErrorException.class,
-                () -> pdfService.watermark(originalFile, imageFile, WatermarkRequest.builder()
-                        .text("TEST").position("center").opacity(0.3f).rotation(45.0f).scale(1.0f).layer("foreground").build()));
+        WatermarkRequest request = WatermarkRequest.builder()
+                .text("TEST").position("center").opacity(0.3f).rotation(45.0f).scale(1.0f).layer("foreground").build();
+        when(pdfAnnotationService.watermark(originalFile, imageFile, request))
+                .thenThrow(new PdfErrorException("Please provide either text OR image, not both"));
+        assertThrows(PdfErrorException.class, () -> pdfService.watermark(originalFile, imageFile, request));
+        verify(pdfAnnotationService).watermark(originalFile, imageFile, request);
     }
 
     @Test
