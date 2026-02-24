@@ -5,10 +5,12 @@ import com.itextpdf.kernel.pdf.PdfReader;
 import com.itextpdf.kernel.pdf.canvas.parser.PdfTextExtractor;
 import com.pdf.pdfapi.dto.*;
 import com.pdf.pdfapi.exception.PdfErrorException;
+import com.pdf.pdfapi.service.core.PdfOptimizationService;
 import com.pdf.pdfapi.service.form.PdfFormService;
 import com.pdf.pdfapi.service.image.PdfImageService;
 import com.pdf.pdfapi.service.metadata.PdfMetadataService;
 import com.pdf.pdfapi.service.ocr.PdfOcrService;
+import com.pdf.pdfapi.service.security.PdfProtectionService;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,6 +42,12 @@ class PdfServiceTest {
 
     @Mock
     private PdfMetadataService pdfMetadataService;
+
+    @Mock
+    private PdfProtectionService pdfProtectionService;
+
+    @Mock
+    private PdfOptimizationService pdfOptimizationService;
 
     @InjectMocks
     private PdfService pdfService;
@@ -465,177 +473,40 @@ class PdfServiceTest {
     }
 
     @Test
-    @SneakyThrows
-    void compressGivenLowLevelExpectCompressedPdf() {
+    void compressDelegatesToPdfOptimizationService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-        byte[] pdfBytes = Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf"));
-        when(originalFile.getBytes()).thenReturn(pdfBytes);
-        when(originalFile.getSize()).thenReturn((long) pdfBytes.length);
-
-        PdfResult result = pdfService.compress(originalFile, "LOW");
-
-        // Verify result
-        assertNotNull(result);
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertTrue(result.suggestedFileName().contains("compressed_low"));
-        assertEquals(2, result.pageCount());
-
-        // Verify PDF is valid
-        try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
-            assertEquals(2, document.getNumberOfPages());
-        }
+        PdfResult expected = PdfResult.builder().content(new byte[]{1}).suggestedFileName("c.pdf").sizeInBytes(1).pageCount(1).build();
+        when(pdfOptimizationService.compress(originalFile, "LOW")).thenReturn(expected);
+        assertEquals(expected, pdfService.compress(originalFile, "LOW"));
+        verify(pdfOptimizationService).compress(originalFile, "LOW");
     }
 
     @Test
-    @SneakyThrows
-    void compressGivenMediumLevelExpectCompressedPdf() {
+    void optimizeDelegatesToPdfOptimizationService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-        byte[] pdfBytes = Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf"));
-        when(originalFile.getBytes()).thenReturn(pdfBytes);
-        when(originalFile.getSize()).thenReturn((long) pdfBytes.length);
-
-        PdfResult result = pdfService.compress(originalFile, "MEDIUM");
-
-        // Verify result
-        assertNotNull(result);
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertTrue(result.suggestedFileName().contains("compressed_medium"));
-        assertEquals(2, result.pageCount());
+        PdfResult expected = PdfResult.builder().content(new byte[]{1}).suggestedFileName("o.pdf").sizeInBytes(1).pageCount(1).build();
+        when(pdfOptimizationService.optimize(originalFile)).thenReturn(expected);
+        assertEquals(expected, pdfService.optimize(originalFile));
+        verify(pdfOptimizationService).optimize(originalFile);
     }
 
     @Test
-    @SneakyThrows
-    void compressGivenHighLevelExpectCompressedPdf() {
+    void encryptDelegatesToPdfProtectionService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-        byte[] pdfBytes = Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf"));
-        when(originalFile.getBytes()).thenReturn(pdfBytes);
-        when(originalFile.getSize()).thenReturn((long) pdfBytes.length);
-
-        PdfResult result = pdfService.compress(originalFile, "HIGH");
-
-        // Verify result
-        assertNotNull(result);
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertTrue(result.suggestedFileName().contains("compressed_high"));
-        assertEquals(2, result.pageCount());
+        EncryptRequest request = new EncryptRequest("user", null, null, true, false, false, false);
+        PdfResult expected = PdfResult.builder().content(new byte[]{1}).suggestedFileName("e.pdf").sizeInBytes(1).pageCount(1).build();
+        when(pdfProtectionService.encrypt(originalFile, request)).thenReturn(expected);
+        assertEquals(expected, pdfService.encrypt(originalFile, request));
+        verify(pdfProtectionService).encrypt(originalFile, request);
     }
 
     @Test
-    @SneakyThrows
-    void compressGivenInvalidLevelExpectFailure() {
+    void decryptDelegatesToPdfProtectionService() {
         MultipartFile originalFile = mock(MultipartFile.class);
-
-        assertThrows(PdfErrorException.class, () -> pdfService.compress(originalFile, "INVALID"));
-    }
-
-    @Test
-    @SneakyThrows
-    void encryptGivenUserPasswordExpectEncryptedPdf() {
-        MultipartFile originalFile = mock(MultipartFile.class);
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
-
-        PdfResult result = pdfService.encrypt(originalFile,
-                new EncryptRequest("user123", null, null, true, false, false, false));
-
-        // Verify result
-        assertNotNull(result);
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertTrue(result.suggestedFileName().contains("encrypted"));
-        assertEquals(2, result.pageCount());
-
-        // Verify PDF is encrypted (should fail without password)
-        assertThrows(Exception.class, () -> {
-            new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())));
-        });
-    }
-
-    @Test
-    @SneakyThrows
-    void encryptGivenOwnerPasswordExpectEncryptedPdf() {
-        MultipartFile originalFile = mock(MultipartFile.class);
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
-
-        PdfResult result = pdfService.encrypt(originalFile,
-                new EncryptRequest(null, "owner456", null, false, false, false, false));
-
-        // Verify result
-        assertNotNull(result);
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertTrue(result.suggestedFileName().contains("encrypted"));
-        assertEquals(2, result.pageCount());
-    }
-
-    @Test
-    @SneakyThrows
-    void encryptGivenNoPasswordExpectFailure() {
-        MultipartFile originalFile = mock(MultipartFile.class);
-
-        assertThrows(PdfErrorException.class,
-                () -> pdfService.encrypt(originalFile, new EncryptRequest(null, null, null, null, null, null, null)));
-    }
-
-    @Test
-    @SneakyThrows
-    void decryptGivenCorrectPasswordExpectDecryptedPdf() {
-        MultipartFile originalFile = mock(MultipartFile.class);
-        when(originalFile.getBytes()).thenReturn(Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf")));
-
-        PdfResult encrypted = pdfService.encrypt(originalFile,
-                new EncryptRequest("password123", "owner456", null, true, true, true, true));
-
-        // Then decrypt using owner password
-        MultipartFile encryptedFile = mock(MultipartFile.class);
-        when(encryptedFile.getBytes()).thenReturn(encrypted.content());
-
-        PdfResult result = pdfService.decrypt(encryptedFile, "owner456");
-
-        // Verify result
-        assertNotNull(result);
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertTrue(result.suggestedFileName().contains("decrypted"));
-        assertEquals(2, result.pageCount());
-
-        // Verify PDF can be opened without password
-        try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
-            assertEquals(2, document.getNumberOfPages());
-        }
-    }
-
-    @Test
-    @SneakyThrows
-    void decryptGivenNoPasswordExpectFailure() {
-        MultipartFile originalFile = mock(MultipartFile.class);
-
-        assertThrows(PdfErrorException.class, () -> pdfService.decrypt(originalFile, null));
-    }
-
-    @Test
-    @SneakyThrows
-    void optimizeGivenValidPdfExpectOptimizedPdf() {
-        MultipartFile originalFile = mock(MultipartFile.class);
-        byte[] pdfBytes = Files.readAllBytes(Path.of("src/test/resources/extract/original_file.pdf"));
-        when(originalFile.getBytes()).thenReturn(pdfBytes);
-        when(originalFile.getSize()).thenReturn((long) pdfBytes.length);
-
-        PdfResult result = pdfService.optimize(originalFile);
-
-        // Verify result
-        assertNotNull(result);
-        assertNotNull(result.content());
-        assertTrue(result.content().length > 0);
-        assertTrue(result.suggestedFileName().contains("optimized"));
-        assertEquals(2, result.pageCount());
-
-        // Verify PDF is valid and optimized
-        try (PdfDocument document = new PdfDocument(new PdfReader(new ByteArrayInputStream(result.content())))) {
-            assertEquals(2, document.getNumberOfPages());
-        }
+        PdfResult expected = PdfResult.builder().content(new byte[]{1}).suggestedFileName("d.pdf").sizeInBytes(1).pageCount(1).build();
+        when(pdfProtectionService.decrypt(originalFile, "secret")).thenReturn(expected);
+        assertEquals(expected, pdfService.decrypt(originalFile, "secret"));
+        verify(pdfProtectionService).decrypt(originalFile, "secret");
     }
 
     @Test

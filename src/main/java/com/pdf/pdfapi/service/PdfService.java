@@ -24,10 +24,12 @@ import com.pdf.pdfapi.dto.PdfMetadataResponse;
 import com.pdf.pdfapi.dto.PdfResult;
 import com.pdf.pdfapi.dto.WatermarkRequest;
 import com.pdf.pdfapi.exception.PdfErrorException;
+import com.pdf.pdfapi.service.core.PdfOptimizationService;
 import com.pdf.pdfapi.service.form.PdfFormService;
 import com.pdf.pdfapi.service.image.PdfImageService;
 import com.pdf.pdfapi.service.metadata.PdfMetadataService;
 import com.pdf.pdfapi.service.ocr.PdfOcrService;
+import com.pdf.pdfapi.service.security.PdfProtectionService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.apache.pdfbox.Loader;
@@ -54,10 +56,8 @@ public class PdfService {
     private final PdfImageService pdfImageService;
     private final PdfFormService pdfFormService;
     private final PdfMetadataService pdfMetadataService;
-
-    private static final String LOW_COMPRESSION_LEVEL = "LOW";
-    private static final String MEDIUM_COMPRESSION_LEVEL = "MEDIUM";
-    private static final String HIGH_COMPRESSION_LEVEL = "HIGH";
+    private final PdfProtectionService pdfProtectionService;
+    private final PdfOptimizationService pdfOptimizationService;
 
     public PdfResult merge(MultipartFile... file) {
         return merge(false, file);
@@ -502,247 +502,19 @@ public class PdfService {
     }
 
     public PdfResult compress(MultipartFile file, String level) {
-        String compressionLevel = validateAndNormalizeCompressionLevel(level);
-
-        try {
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            WriterProperties writerProperties = configureCompressionWriter(compressionLevel);
-
-            PdfWriter writer = new PdfWriter(outputStream, writerProperties);
-            PdfDocument pdfDocument = new PdfDocument(toPdfReader(file), writer);
-
-            applyCompressionToPages(pdfDocument, compressionLevel);
-
-            int pageCount = pdfDocument.getNumberOfPages();
-            pdfDocument.close();
-
-            byte[] pdfBytes = outputStream.toByteArray();
-            logCompressionResult(compressionLevel, file.getSize(), pdfBytes.length, pageCount);
-            return buildPdfResult(pdfBytes, "compressed_" + compressionLevel.toLowerCase(), pageCount);
-
-        } catch (PdfErrorException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to compress PDF", e);
-            throw new PdfErrorException("Failed to compress PDF: " + e.getMessage(), e);
-        }
-    }
-
-    private String validateAndNormalizeCompressionLevel(String level) {
-        String normalized = (level != null && !level.isBlank()) ? level.toUpperCase() : MEDIUM_COMPRESSION_LEVEL;
-        if (!normalized.matches("LOW|MEDIUM|HIGH")) {
-            throw new PdfErrorException("Invalid compression level. Must be LOW, MEDIUM, or HIGH");
-        }
-        return normalized;
-    }
-
-    private WriterProperties configureCompressionWriter(String compressionLevel) {
-        WriterProperties writerProperties = new WriterProperties();
-        if (MEDIUM_COMPRESSION_LEVEL.equals(compressionLevel) || HIGH_COMPRESSION_LEVEL.equals(compressionLevel)) {
-            writerProperties.setFullCompressionMode(true);
-        }
-        return writerProperties;
-    }
-
-    private void applyCompressionToPages(PdfDocument pdfDocument, String compressionLevel) {
-        if (LOW_COMPRESSION_LEVEL.equals(compressionLevel)) {
-            return;
-        }
-        int totalPages = pdfDocument.getNumberOfPages();
-        for (int i = 1; i <= totalPages; i++) {
-            compressPageResources(pdfDocument.getPage(i));
-        }
-    }
-
-    private void logCompressionResult(String level, long originalSize, long compressedSize, int pageCount) {
-        double reductionPercentage = ((originalSize - compressedSize) / (double) originalSize) * 100;
-        log.info("Successfully compressed PDF with {} level: {} bytes -> {} bytes ({} % reduction, {} pages)",
-                level, originalSize, compressedSize, String.format("%.2f", reductionPercentage), pageCount);
-    }
-
-    private void compressPageResources(PdfPage page) {
-        try {
-            PdfDictionary resources = page.getPdfObject().getAsDictionary(PdfName.Resources);
-            if (resources == null) return;
-            PdfDictionary xObject = resources.getAsDictionary(PdfName.XObject);
-            if (xObject != null) {
-                compressXObjectImages(xObject);
-            }
-        } catch (Exception e) {
-            log.warn("Failed to compress resources on page, continuing: {}", e.getMessage());
-        }
-    }
-
-    private void compressXObjectImages(PdfDictionary xObject) {
-        for (PdfName imgName : xObject.keySet()) {
-            PdfStream stream = xObject.getAsStream(imgName);
-            if (stream != null && PdfName.Image.equals(stream.get(PdfName.Subtype))) {
-                compressImageStream(stream);
-            }
-        }
-    }
-
-    private void compressImageStream(PdfStream imageStream) {
-        try {
-            PdfObject filter = imageStream.get(PdfName.Filter);
-            if (!PdfName.DCTDecode.equals(filter)) {
-                imageStream.put(PdfName.Filter, PdfName.FlateDecode);
-                imageStream.setModified();
-            }
-        } catch (Exception e) {
-            log.warn("Failed to compress image stream: {}", e.getMessage());
-        }
+        return pdfOptimizationService.compress(file, level);
     }
 
     public PdfResult encrypt(MultipartFile file, EncryptRequest request) {
-        validatePasswordsProvided(request.userPassword(), request.ownerPassword());
-
-        EncryptionConfig config = buildEncryptionConfig(request);
-
-        try {
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-            WriterProperties writerProperties = createEncryptedWriter(config);
-
-            PdfDocument pdfDocument = new PdfDocument(toPdfReader(file), new PdfWriter(outputStream, writerProperties));
-
-            int pageCount = pdfDocument.getNumberOfPages();
-            pdfDocument.close();
-
-            byte[] pdfBytes = outputStream.toByteArray();
-            log.info("Successfully encrypted PDF with {} encryption ({} pages)",
-                    getEncryptionTypeName(config.encryptionType()), pageCount);
-            return buildPdfResult(pdfBytes, "encrypted", pageCount);
-
-        } catch (PdfErrorException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to encrypt PDF", e);
-            throw new PdfErrorException("Failed to encrypt PDF: " + e.getMessage(), e);
-        }
-    }
-
-    private void validatePasswordsProvided(String userPassword, String ownerPassword) {
-        if ((userPassword == null || userPassword.isBlank()) &&
-            (ownerPassword == null || ownerPassword.isBlank())) {
-            throw new PdfErrorException("At least one password (user or owner) must be provided");
-        }
-    }
-
-    private EncryptionConfig buildEncryptionConfig(EncryptRequest request) {
-        String userPwd = (request.userPassword() != null && !request.userPassword().isBlank()) ? request.userPassword() : "";
-        String ownerPwd = (request.ownerPassword() != null && !request.ownerPassword().isBlank()) ? request.ownerPassword() : "";
-        int encType = (request.encryptionType() != null) ? request.encryptionType() : EncryptionConstants.ENCRYPTION_AES_256;
-
-        validateEncryptionType(encType);
-
-        int permissions = calculatePermissions(request.allowPrinting(), request.allowModifying(), request.allowCopy(), request.allowAnnotations());
-
-        return new EncryptionConfig(userPwd, ownerPwd, encType, permissions);
-    }
-
-    private void validateEncryptionType(int encryptionType) {
-        if (encryptionType != EncryptionConstants.STANDARD_ENCRYPTION_40 &&
-            encryptionType != EncryptionConstants.STANDARD_ENCRYPTION_128 &&
-            encryptionType != EncryptionConstants.ENCRYPTION_AES_128 &&
-            encryptionType != EncryptionConstants.ENCRYPTION_AES_256) {
-            throw new PdfErrorException("Invalid encryption type. Use 40, 128, 256, or AES256");
-        }
-    }
-
-    private int calculatePermissions(Boolean allowPrinting, Boolean allowModifying,
-                                     Boolean allowCopy, Boolean allowAnnotations) {
-        int permissions = 0;
-        if (Boolean.TRUE.equals(allowPrinting)) permissions |= EncryptionConstants.ALLOW_PRINTING;
-        if (Boolean.TRUE.equals(allowModifying)) permissions |= EncryptionConstants.ALLOW_MODIFY_CONTENTS;
-        if (Boolean.TRUE.equals(allowCopy)) permissions |= EncryptionConstants.ALLOW_COPY;
-        if (Boolean.TRUE.equals(allowAnnotations)) permissions |= EncryptionConstants.ALLOW_MODIFY_ANNOTATIONS;
-        return permissions;
-    }
-
-    private WriterProperties createEncryptedWriter(EncryptionConfig config) {
-        WriterProperties writerProperties = new WriterProperties();
-        writerProperties.setStandardEncryption(
-                config.userPassword().getBytes(),
-                config.ownerPassword().getBytes(),
-                config.permissions(),
-                config.encryptionType()
-        );
-        return writerProperties;
-    }
-
-    private record EncryptionConfig(String userPassword, String ownerPassword,
-                                     int encryptionType, int permissions) {
+        return pdfProtectionService.encrypt(file, request);
     }
 
     public PdfResult decrypt(MultipartFile file, String password) {
-        if (password == null || password.isBlank()) {
-            throw new PdfErrorException("Password is required to decrypt PDF");
-        }
-
-        try {
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-
-            ReaderProperties readerProperties = new ReaderProperties();
-            readerProperties.setPassword(password.getBytes());
-
-            PdfReader reader = new PdfReader(new ByteArrayInputStream(file.getBytes()), readerProperties);
-            PdfDocument pdfDocument = new PdfDocument(reader, new PdfWriter(outputStream));
-
-            int pageCount = pdfDocument.getNumberOfPages();
-            pdfDocument.close();
-
-            byte[] pdfBytes = outputStream.toByteArray();
-            log.info("Successfully decrypted PDF ({} pages)", pageCount);
-            return buildPdfResult(pdfBytes, "decrypted", pageCount);
-
-        } catch (PdfErrorException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to decrypt PDF", e);
-            throw new PdfErrorException("Failed to decrypt PDF. Check if password is correct: " + e.getMessage(), e);
-        }
-    }
-
-    private String getEncryptionTypeName(int encryptionType) {
-        return switch (encryptionType) {
-            case EncryptionConstants.STANDARD_ENCRYPTION_40 -> "40-bit";
-            case EncryptionConstants.STANDARD_ENCRYPTION_128 -> "128-bit";
-            case EncryptionConstants.ENCRYPTION_AES_128 -> "AES-128";
-            case EncryptionConstants.ENCRYPTION_AES_256 -> "AES-256";
-            default -> "Unknown";
-        };
+        return pdfProtectionService.decrypt(file, password);
     }
 
     public PdfResult optimize(MultipartFile file) {
-        try {
-            ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-
-            WriterProperties writerProperties = new WriterProperties();
-            writerProperties.setFullCompressionMode(true);
-            writerProperties.addXmpMetadata();
-
-            PdfDocument pdfDocument = new PdfDocument(toPdfReader(file), new PdfWriter(outputStream, writerProperties));
-            pdfDocument.setFlushUnusedObjects(true);
-
-            int pageCount = pdfDocument.getNumberOfPages();
-            for (int i = 1; i <= pageCount; i++) {
-                pdfDocument.getPage(i).flush();
-            }
-
-            pdfDocument.close();
-
-            byte[] pdfBytes = outputStream.toByteArray();
-            double reductionPercentage = ((file.getSize() - pdfBytes.length) / (double) file.getSize()) * 100;
-            log.info("Successfully optimized PDF: {} bytes -> {} bytes ({} % reduction, {} pages)",
-                    file.getSize(), pdfBytes.length, String.format("%.2f", reductionPercentage), pageCount);
-            return buildPdfResult(pdfBytes, "optimized", pageCount);
-
-        } catch (PdfErrorException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("Failed to optimize PDF", e);
-            throw new PdfErrorException("Failed to optimize PDF: " + e.getMessage(), e);
-        }
+        return pdfOptimizationService.optimize(file);
     }
 
     public PdfResult watermark(MultipartFile file, MultipartFile imageFile, WatermarkRequest request) {
