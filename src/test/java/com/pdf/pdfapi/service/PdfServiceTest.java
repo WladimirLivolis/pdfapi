@@ -5,6 +5,7 @@ import com.itextpdf.kernel.pdf.PdfReader;
 import com.itextpdf.kernel.pdf.canvas.parser.PdfTextExtractor;
 import com.pdf.pdfapi.dto.*;
 import com.pdf.pdfapi.exception.PdfErrorException;
+import com.pdf.pdfapi.service.form.PdfFormService;
 import com.pdf.pdfapi.service.image.PdfImageService;
 import com.pdf.pdfapi.service.ocr.PdfOcrService;
 import lombok.SneakyThrows;
@@ -19,6 +20,7 @@ import java.io.ByteArrayInputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
@@ -31,6 +33,9 @@ class PdfServiceTest {
 
     @Mock
     private PdfImageService pdfImageService;
+
+    @Mock
+    private PdfFormService pdfFormService;
 
     @InjectMocks
     private PdfService pdfService;
@@ -752,5 +757,24 @@ class PdfServiceTest {
 
         assertArrayEquals(expected, result);
         verify(pdfImageService).extractImages(file, 100, 200);
+    }
+
+    @Test
+    void fillFormDelegatesToPdfFormService() {
+        MultipartFile file = mock(MultipartFile.class);
+        Map<String, String> fields = Map.of("name", "John");
+        PdfResult expected = PdfResult.builder()
+                .content(new byte[]{1, 2, 3})
+                .suggestedFileName("filled_test.pdf")
+                .sizeInBytes(3)
+                .pageCount(1)
+                .build();
+
+        when(pdfFormService.fillForm(file, fields, true)).thenReturn(expected);
+
+        PdfResult result = pdfService.fillForm(file, fields, true);
+
+        assertEquals(expected, result);
+        verify(pdfFormService).fillForm(file, fields, true);
     }
 }
